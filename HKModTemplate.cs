@@ -68,8 +68,16 @@ public class HKModTemplate : Mod, IGlobalSettings<Settings>, IMenuMod {
     [Obsolete]
     private void PlayMakerFSM_OnEnable(On.PlayMakerFSM.orig_OnEnable orig, PlayMakerFSM self) {
         if (mySettings.on) {
-            // if (self.gameObject.scene.name == "GG_Mega_Moss_Charger" && self.gameObject.name == "Mega Moss Charger" && self.FsmName == "Mossy Control") {
-            // }
+            //FSM:MoveMent Attacking BroadcastDeath
+            if (self.gameObject.scene.name == "GG_Ghost_Hu" && self.gameObject.name == "Ghost Warrior Hu") {
+                if (self.FsmName == "Attacking") {
+                    self.enabled = false;
+                }
+                if (self.FsmName == "MoveMent") {
+                    self.enabled = false;
+                }
+
+            }
         }
         orig(self);
     }

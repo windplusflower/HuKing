@@ -1,0 +1,3 @@
+[submodule "RingLib"]
+	path = RingLib
+	url = https://github.com/nearrin/RingLib.git
