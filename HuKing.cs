@@ -1,8 +1,4 @@
-﻿/*
- * 空洞骑士Mod入门到进阶指南/配套模版
- * 作者：近环（https://space.bilibili.com/1224243724）
- */
-
+﻿
 using System.Runtime.ConstrainedExecution;
 using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
@@ -14,7 +10,6 @@ using UnityEngine;
 
 namespace HuKing;
 
-// Mod配置类，目前只有开关的配置。可以自行添加额外选项，并在GetMenuData里添加交互。
 [Serializable]
 public class Settings {
     public bool on = true;
@@ -42,7 +37,6 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod {
      * ******** 预加载和hook ********
      */
     public override List<(string, string)> GetPreloadNames() {
-        // 预加载你想要的攻击特效或者敌人，具体请阅读教程。
         return new List<(string, string)> {
             ("White_Palace_05", "wp_saw"),
             ("White_Palace_03_hub", "White_ Spikes"),
@@ -52,7 +46,6 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod {
         };
     }
     public override void Initialize(Dictionary<string, Dictionary<string, GameObject>> preloadedObjects) {
-        // 添加需要使用的hooks
         On.PlayMakerFSM.OnEnable += PlayMakerFSM_OnEnable;
         sawPrefab = preloadedObjects["White_Palace_05"]["wp_saw"];
         spikePrefab = preloadedObjects["White_Palace_03_hub"]["White_ Spikes"];
@@ -69,9 +62,6 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod {
         return orig;
     }
 
-    /* 
-     * ******** FSM相关改动，这个示例改动使得左特随机在空中多次假动作 ********
-     */
     [Obsolete]
     private void PlayMakerFSM_OnEnable(On.PlayMakerFSM.orig_OnEnable orig, PlayMakerFSM self) {
         if (mySettings.on) {
