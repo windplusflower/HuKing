@@ -12,24 +12,28 @@ using Satchel;
 using Satchel.Futils;
 using UnityEngine;
 
-namespace MossJumper;
+namespace HuKing;
 
 // Mod配置类，目前只有开关的配置。可以自行添加额外选项，并在GetMenuData里添加交互。
 [Serializable]
 public class Settings {
     public bool on = true;
+    public bool lowPerformanceMode = false;
+    public bool enableShining = true;
 }
 
-public class HKModTemplate : Mod, IGlobalSettings<Settings>, IMenuMod {
-    public static HKModTemplate instance;
+public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod {
+    public static HuKing instance;
 
-    private Dictionary<string, int> skillWeights = new Dictionary<string, int>();
-
-    private SkillSelector selector;
+    private GameObject sawPrefab;
+    private GameObject spikePrefab;
+    private GameObject ringPrefab;
+    private GameObject beamPrefab;
+    private GameObject stomperPrefab;
     /*  
      * ******** Mod名字和版本号 ********
      */
-    public HKModTemplate() : base("HKModTemplate") {
+    public HuKing() : base("HuKing") {
         instance = this;
     }
     public override string GetVersion() => "1.0";
@@ -40,25 +44,28 @@ public class HKModTemplate : Mod, IGlobalSettings<Settings>, IMenuMod {
     public override List<(string, string)> GetPreloadNames() {
         // 预加载你想要的攻击特效或者敌人，具体请阅读教程。
         return new List<(string, string)> {
-            // ("GG_Radiance", "Boss Control/Absolute Radiance")
+            ("White_Palace_05", "wp_saw"),
+            ("White_Palace_03_hub", "White_ Spikes"),
+            ("GG_Ghost_Hu", "Ring Holder/1"),
+            ("GG_Radiance","Boss Control/Absolute Radiance/Eye Beam Glow/Burst 1/Radiant Beam"),
+            ("Mines_19","_Scenery/stomper_1/mines_stomper_02")
         };
     }
     public override void Initialize(Dictionary<string, Dictionary<string, GameObject>> preloadedObjects) {
         // 添加需要使用的hooks
         On.PlayMakerFSM.OnEnable += PlayMakerFSM_OnEnable;
-        // var radiance = preloadedObjects["GG_Radiance"]["Boss Control/Absolute Radiance"];
-        // var radianceFSM = radiance.LocateMyFSM("Attack Commands");
-        // orbTemplate = radianceFSM.GetAction<SpawnObjectFromGlobalPool>("Spawn Fireball", 1).gameObject.Value;
-        // GameObject.Destroy(orbTemplate.GetComponent<PersistentBoolItem>());
-        // GameObject.Destroy(orbTemplate.GetComponent<ConstrainPosition>());
-        // OrbShotting.orbTemplate = orbTemplate;
+        sawPrefab = preloadedObjects["White_Palace_05"]["wp_saw"];
+        spikePrefab = preloadedObjects["White_Palace_03_hub"]["White_ Spikes"];
+        ringPrefab = preloadedObjects["GG_Ghost_Hu"]["Ring Holder/1"];
+        beamPrefab = preloadedObjects["GG_Radiance"]["Boss Control/Absolute Radiance/Eye Beam Glow/Burst 1/Radiant Beam"];
+        stomperPrefab = preloadedObjects["Mines_19"]["_Scenery/stomper_1/mines_stomper_02"];
 
         ModHooks.LanguageGetHook += changeName;
     }
     private string changeName(string key, string title, string orig) {
-        // if (key == "MEGA_MOSS_MAIN" || key == "NAME_MEGA_MOSS_CHARGER" && mySettings.on) {
-        //     return "大型苔藓冲飞者";
-        // }
+        if ((key == "GH_HU_C_MAIN" || key == "GH_HU_NC_MAIN" || key == "NAME_GHOST_HU") && mySettings.on) {
+            return "胡王";
+        }
         return orig;
     }
 
@@ -68,12 +75,18 @@ public class HKModTemplate : Mod, IGlobalSettings<Settings>, IMenuMod {
     [Obsolete]
     private void PlayMakerFSM_OnEnable(On.PlayMakerFSM.orig_OnEnable orig, PlayMakerFSM self) {
         if (mySettings.on) {
-            //FSM:MoveMent Attacking BroadcastDeath
             if (self.gameObject.scene.name == "GG_Ghost_Hu" && self.gameObject.name == "Ghost Warrior Hu") {
                 if (self.FsmName == "Attacking") {
+                    Log("enable HuKing");
                     self.enabled = false;
+                    if (mySettings.lowPerformanceMode) {
+                        self.gameObject.AddComponent<HuStateMachine>().init(spikePrefab, ringPrefab, beamPrefab, stomperPrefab, 0.7f, mySettings.enableShining);
+                    }
+                    else {
+                        self.gameObject.AddComponent<HuStateMachine>().init(sawPrefab, ringPrefab, beamPrefab, stomperPrefab, 0.3f, mySettings.enableShining);
+                    }
                 }
-                if (self.FsmName == "MoveMent") {
+                if (self.FsmName == "Movement") {
                     self.enabled = false;
                 }
 
@@ -105,7 +118,31 @@ public class HKModTemplate : Mod, IGlobalSettings<Settings>, IMenuMod {
                 // 把菜单的当前被选项更新到配置变量
                 Saver = i => mySettings.on = i == 0,
                 Loader = () => mySettings.on ? 0 : 1,
-                // Name = "Moss Jumper",
+                Name = "胡王",
+            }
+        );
+        menus.Add(
+            new() {
+                Values = new string[]
+                {
+                    Language.Language.Get("MOH_ON", "MainMenu"),
+                    Language.Language.Get("MOH_OFF", "MainMenu"),
+                },
+                Saver = i => mySettings.lowPerformanceMode = i == 0,
+                Loader = () => mySettings.lowPerformanceMode ? 0 : 1,
+                Name = "低性能模式",
+            }
+        );
+        menus.Add(
+            new() {
+                Values = new string[]
+                {
+                    Language.Language.Get("MOH_ON", "MainMenu"),
+                    Language.Language.Get("MOH_OFF", "MainMenu"),
+                },
+                Saver = i => mySettings.enableShining = i == 0,
+                Loader = () => mySettings.enableShining ? 0 : 1,
+                Name = "闪光特效",
             }
         );
         return menus;
