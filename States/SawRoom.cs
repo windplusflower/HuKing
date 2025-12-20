@@ -6,17 +6,28 @@ using UnityEngine.PlayerLoop;
 
 namespace HuKing;
 
-internal partial class HuStateMachine : EntityStateMachine {
+internal partial class HuStateMachine : EntityStateMachine
+{
     const int maxn = 2000;
     private int[] fa = new int[maxn];
     Queue<GameObject> movingSaws = new Queue<GameObject>();
     [State]
-    private IEnumerator<Transition> SawRoom() {
+    private IEnumerator<Transition> SawRoom()
+    {
         //HuKing.instance.Log("Entering SawRoom state");
         generateSaw();
         yield return new ToState { State = nameof(Appear) };
     }
-    private (float, float, float, float) getLen() {
+    private void registerSawRoom()
+    {
+        skillTable.Add(nameof(SawRoom), new SkillPhases(
+            () => Appear_SawRoom(),
+            () => Loop_SawRoom(),
+            () => Disappear_SawRoom()
+        ));
+    }
+    private (float, float, float, float) getLen()
+    {
         int num1 = 3;
         if (HPManager.hp <= originalHp * 2 / 3) num1 = 4;
         float height = (upWall - downWall) / num1;
@@ -24,12 +35,13 @@ internal partial class HuStateMachine : EntityStateMachine {
         float width = (rightWall - leftWall) / num2;
         return (num1, num2, width, height);
     }
-    private void generateSaw() {
+    private void generateSaw()
+    {
         var saw = new List<(double, double)>();
         var edge = new List<(int, int)>();
         var block = new List<(int, int)>();
         var (num1, num2, width, height) = getLen();
-        var sawSize = this.sawsize * 3 / num1;
+        var sawSize = this.sawSize * 3 / num1;
 
         var rand = new System.Random();
 
@@ -43,20 +55,23 @@ internal partial class HuStateMachine : EntityStateMachine {
         Func<int, (int, int)> unhash = a => (a / 100, a % 100);
 
         for (int i = 0; i < num1; i++)
-            for (int j = 0; j < num2; j++) {
+            for (int j = 0; j < num2; j++)
+            {
                 if (i < num1 - 1) edge.Add((hash(i, j), hash(i + 1, j)));
                 if (j < num2 - 1) edge.Add((hash(i, j), hash(i, j + 1)));
             }
 
         Shuffle(edge, rand);
 
-        foreach (var v in edge) {
+        foreach (var v in edge)
+        {
             int x = find(v.Item1), y = find(v.Item2);
             if (x != y) fa[x] = y;
             else block.Add(v);
         }
 
-        foreach (var v in block) {
+        foreach (var v in block)
+        {
             var v1 = unhash(v.Item1);
             var v2 = unhash(v.Item2);
             float y1 = (v1.Item1 + 0.5f) * height + downWall;
@@ -70,11 +85,13 @@ internal partial class HuStateMachine : EntityStateMachine {
             float rx1 = 0, ry1 = 0;
             float rx2 = 0, ry2 = 0;
             int n = (int)height;
-            if (v1.Item1 == v2.Item1) {
+            if (v1.Item1 == v2.Item1)
+            {
                 rx1 = mx; ry1 = my - height / 2f;
                 rx2 = mx; ry2 = my + height / 2f;
             }
-            else {
+            else
+            {
                 rx1 = mx - width / 2f; ry1 = my;
                 rx2 = mx + width / 2f; ry2 = my;
                 n = (int)width;
@@ -82,7 +99,8 @@ internal partial class HuStateMachine : EntityStateMachine {
 
             float dx = (rx2 - rx1) / n;
             float dy = (ry2 - ry1) / n;
-            for (int i = 0; i <= n; i++) {
+            for (int i = 0; i <= n; i++)
+            {
                 var obj = blankSaws.Dequeue();
                 obj.transform.position = new Vector3(rx1 + dx * i, ry1 + dy * i, 0);
                 obj.transform.localScale = new Vector3(sawSize, sawSize, 1);
@@ -96,28 +114,35 @@ internal partial class HuStateMachine : EntityStateMachine {
         return;
     }
 
-    private void Shuffle<T>(List<T> list, System.Random rand) {
-        for (int i = list.Count - 1; i > 0; i--) {
+    private void Shuffle<T>(List<T> list, System.Random rand)
+    {
+        for (int i = list.Count - 1; i > 0; i--)
+        {
             int j = rand.Next(i + 1);
             (list[i], list[j]) = (list[j], list[i]);
         }
     }
-    private IEnumerator SawLoop() {
-        if (HPManager.hp <= originalHp / 3) {
+    private IEnumerator Loop_SawRoom()
+    {
+        if (HPManager.hp <= originalHp / 3)
+        {
             movingSaws = new Queue<GameObject>();
             Queue<bool> sawDirections = new Queue<bool>(); // true表示上下运动，false表示左右运动
 
             List<GameObject> eligibleSaws = new List<GameObject>();
             List<GameObject> allSaws = new List<GameObject>();
-            while (saws.Count > 0) {
+            while (saws.Count > 0)
+            {
                 GameObject saw = saws.Dequeue();
                 allSaws.Add(saw);
-                if (saw.transform.position.x > 40 || saw.transform.position.y > 5) {
+                if (saw.transform.position.x > 40 || saw.transform.position.y > 5)
+                {
                     eligibleSaws.Add(saw);
                 }
             }
 
-            foreach (var saw in allSaws) {
+            foreach (var saw in allSaws)
+            {
                 saws.Enqueue(saw);
             }
 
@@ -126,7 +151,8 @@ internal partial class HuStateMachine : EntityStateMachine {
             var rand = new System.Random();
             var (_, _, width, height) = getLen();
 
-            for (int i = 0; i < count; i++) {
+            for (int i = 0; i < count; i++)
+            {
                 GameObject originalSaw = eligibleSaws[i];
                 GameObject newSaw = blankSaws.Dequeue();
                 newSaw.transform.position = originalSaw.transform.position;
@@ -141,20 +167,25 @@ internal partial class HuStateMachine : EntityStateMachine {
             bool[] directions = new bool[movingSaws.Count];
 
             List<GameObject> sawList = new List<GameObject>(movingSaws);
-            for (int i = 0; i < sawList.Count; i++) {
+            for (int i = 0; i < sawList.Count; i++)
+            {
                 initialPositions[i] = sawList[i].transform.position;
                 directions[i] = sawDirections.Dequeue();
                 sawDirections.Enqueue(directions[i]);
             }
 
-            while (true) {
+            while (true)
+            {
                 time += Time.deltaTime;
-                for (int i = 0; i < sawList.Count; i++) {
+                for (int i = 0; i < sawList.Count; i++)
+                {
                     Vector3 newPosition = initialPositions[i];
-                    if (directions[i]) {
+                    if (directions[i])
+                    {
                         newPosition.y = initialPositions[i].y + Mathf.Sin(time * 2f) * height;
                     }
-                    else {
+                    else
+                    {
                         newPosition.x = initialPositions[i].x + Mathf.Sin(time * 2f) * width;
                     }
 
@@ -164,7 +195,32 @@ internal partial class HuStateMachine : EntityStateMachine {
                 yield return null;
             }
         }
+        HuKing.instance.Log("SawRoom Loop stoped");
+        yield return null;
+    }
 
+    private IEnumerator<Transition> Appear_SawRoom()
+    {
+        foreach (var saw in saws)
+        {
+            saw.SetActive(true);
+        }
+        yield return null;
+    }
+    private IEnumerator<Transition> Disappear_SawRoom()
+    {
+        while (saws.Count > 0)
+        {
+            var saw = saws.Dequeue();
+            saw.SetActive(false);
+            blankSaws.Enqueue(saw);
+        }
+        while (movingSaws.Count > 0)
+        {
+            var saw = movingSaws.Dequeue();
+            saw.SetActive(false);
+            blankSaws.Enqueue(saw);
+        }
         yield return null;
     }
 }

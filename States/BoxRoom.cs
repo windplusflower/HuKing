@@ -6,23 +6,37 @@ using UnityEngine.PlayerLoop;
 
 namespace HuKing;
 
-internal partial class HuStateMachine : EntityStateMachine {
+internal partial class HuStateMachine : EntityStateMachine
+{
     private float speedRate;
     [State]
-    private IEnumerator<Transition> BoxRoom() {
+    private IEnumerator<Transition> BoxRoom()
+    {
         //HuKing.instance.Log("BoxRoom state entered");
         yield return new ToState { State = nameof(Appear) };
     }
-    private IEnumerator BoxLoop() {
-        //HuKing.instance.Log("BoxLoop started");
+    private void registerBoxRoom()
+    {
+        skillTable.Add(nameof(BoxRoom), new SkillPhases(
+            () => Appear_BoxRoom(),
+            () => Loop_BoxRoom(),
+            () => Disappear_BoxRoom()
+        ));
+    }
+    private IEnumerator Loop_BoxRoom()
+    {
+        HuKing.instance.Log("BoxLoop started");
         mCoroutines.Add(StartCoroutine(ShotBeamLoop()));
         mCoroutines.Add(StartCoroutine(StomperLoop()));
-        while (true) {
+        while (true)
+        {
             yield return null;
         }
     }
-    private IEnumerator ShotBeamLoop() {
-        while (true) {
+    private IEnumerator ShotBeamLoop()
+    {
+        while (true)
+        {
             beam.transform.position = transform.position;
             var dir = (Target().transform.position - transform.position).normalized;
             var degree = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
@@ -39,9 +53,11 @@ internal partial class HuStateMachine : EntityStateMachine {
             yield return null;
         }
     }
-    private IEnumerator StomperLoop() {
+    private IEnumerator StomperLoop()
+    {
         speedRate = 5f;
-        while (true) {
+        while (true)
+        {
             var isRandom = HPManager.hp <= originalHp / 3;
             var stomper = stompers.Dequeue();
             var heightScale = UnityEngine.Random.Range(1f, 2.8f);
@@ -49,21 +65,37 @@ internal partial class HuStateMachine : EntityStateMachine {
             stomper.SetActive(true);
             stompers.Enqueue(stomper);
 
-            if (HPManager.hp <= originalHp * 2 / 3) {
+            if (HPManager.hp <= originalHp * 2 / 3)
+            {
                 stomper = stompers.Dequeue();
                 heightScale = UnityEngine.Random.Range(1f, 3.8f - heightScale);
                 stomper.GetComponent<StomperStateMachine>().init(heightScale, 1f, speedRate, isRandom);
                 stomper.SetActive(true);
                 stompers.Enqueue(stomper);
             }
-            if (speedRate > 1f) {
+            if (speedRate > 1f)
+            {
                 speedRate -= 1f;
                 yield return null;
             }
-            else {
+            else
+            {
                 speedRate = 1f;
                 yield return new WaitForSeconds(1f);
             }
         }
+    }
+    private IEnumerator<Transition> Appear_BoxRoom()
+    {
+        yield return null;
+    }
+    private IEnumerator<Transition> Disappear_BoxRoom()
+    {
+        foreach (var stomper in stompers)
+        {
+            stomper.SetActive(false);
+        }
+        beam.SetActive(false);
+        yield return null;
     }
 }

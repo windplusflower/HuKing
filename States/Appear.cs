@@ -1,3 +1,4 @@
+using Modding;
 using RingLib.StateMachine;
 using Satchel;
 using UnityEngine;
@@ -5,18 +6,28 @@ using UnityEngine.PlayerLoop;
 
 namespace HuKing;
 
-internal partial class HuStateMachine : EntityStateMachine {
+internal partial class HuStateMachine : EntityStateMachine
+{
     const float moveTime = 1f;
     [State]
-    private IEnumerator<Transition> Appear() {
-        //HuKing.instance.Log("Appearing");
+    private IEnumerator<Transition> Appear()
+    {
         yield return new CoroutineTransition { Routine = moveKnight() };
+        if (skillTable.TryGetValue(SkillChoosen, out var skill))
+        {
+            HuKing.instance.Log($"{SkillChoosen} skill Choosen");
+            yield return new CoroutineTransition { Routine = skill.Appear() };
+        }
+        else
+        {
+            HuKing.instance.Log($"{SkillChoosen} skill not found");
+        }
         bossAppear();
-        sawAppear();
         flash.SetActive(true);
         yield return new ToState { State = nameof(Hit) };
     }
-    private IEnumerator<Transition> moveKnight() {
+    private IEnumerator<Transition> moveKnight()
+    {
         HeroController.instance.RelinquishControl();
 
         var ring = Instantiate(ringPrefab);
@@ -37,14 +48,16 @@ internal partial class HuStateMachine : EntityStateMachine {
 
         var wpin = Instantiate(warpIn);
         wpin.transform.position = Target().transform.position;
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 5; i++)
+        {
             wpin.SetActive(true);
             yield return new WaitFor { Seconds = 0.1f };
         }
 
         Destroy(wpin);
 
-        while (pasttime < moveTime) {
+        while (pasttime < moveTime)
+        {
             pasttime += Time.deltaTime;
             Target().transform.position += V * (Time.deltaTime / moveTime);
             yield return new NoTransition();
@@ -54,7 +67,8 @@ internal partial class HuStateMachine : EntityStateMachine {
         HeroController.instance.RegainControl();
         PlayerData.instance.SetHazardRespawn(targetKnightPosition, true);
         Destroy(ring);
-        if (enableShining) {
+        if (enableShining)
+        {
 
             var fsh = Instantiate(warpIn);
             fsh.transform.position = new Vector3((leftWall + rightWall) / 2f, (upWall + downWall) / 2f, 0);
@@ -65,16 +79,11 @@ internal partial class HuStateMachine : EntityStateMachine {
             Destroy(fsh);
         }
     }
-    private void bossAppear() {
+    private void bossAppear()
+    {
         gameObject.transform.position = targetHuPosition;
         gameObject.transform.localScale = Vector3.one;
         warpIn.SetActive(true);
         flash.SetActive(true);
-    }
-
-    private void sawAppear() {
-        foreach (var saw in saws) {
-            saw.SetActive(true);
-        }
     }
 }

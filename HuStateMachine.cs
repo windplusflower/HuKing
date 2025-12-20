@@ -6,11 +6,13 @@ using UnityEngine;
 using UnityEngine.PlayerLoop;
 namespace HuKing;
 
-internal partial class HuStateMachine : EntityStateMachine {
+internal partial class HuStateMachine : EntityStateMachine
+{
     private Config config = new();
     private tk2dSpriteAnimator animator = new();
     private GameObject sawPrefab, ringPrefab, beam, stomperPrefab;
     private GameObject warpIn, warpOut, flash;
+    private GameObject sawFrame;
     private bool enableShining = true;
     static private float leftWall = 32f, rightWall = 66f, downWall = 2.5f, upWall = 17f;
     private Queue<GameObject> saws = new();
@@ -21,8 +23,9 @@ internal partial class HuStateMachine : EntityStateMachine {
     private Vector3 targetKnightPosition;
     private Vector3 targetHuPosition;
     private int hitCount = 0;
-    private float sawsize = 0.3f;
+    private float sawSize = 0.3f;
     private string SkillChoosen = "None";
+    private Dictionary<string, SkillPhases> skillTable = new Dictionary<string, SkillPhases>();
 
     public HuStateMachine() : base(
         startState: nameof(Idle),
@@ -30,27 +33,34 @@ internal partial class HuStateMachine : EntityStateMachine {
         terrainLayer: "terrain",
         epsilon: 0.01f,
         horizontalCornerCorrection: false,
-        spriteFacingLeft: true) {
+        spriteFacingLeft: true)
+    {
     }
-    public void init(GameObject sawPrefab, GameObject ringPrefab, GameObject beamPrefab, GameObject stomperPrefab, float sawsize, bool enableShining) {
+    public void init(GameObject sawPrefab, GameObject ringPrefab, GameObject beamPrefab, GameObject stomperPrefab, float sawsize, bool enableShining)
+    {
         this.sawPrefab = sawPrefab;
         this.ringPrefab = ringPrefab;
         this.beam = Instantiate(beamPrefab);
         this.stomperPrefab = stomperPrefab;
-        this.sawsize = sawsize;
+        this.sawSize = sawsize;
         this.enableShining = enableShining;
+        registerSawRoom();
+        registerBoxRoom();
     }
 
-    protected override void EntityStateMachineStart() {
+    protected override void EntityStateMachineStart()
+    {
         // A separate GameObject for animation is good for adjusting offsets
         animator = gameObject.GetComponent<tk2dSpriteAnimator>();
         warpIn = gameObject.FindGameObjectInChildren("Warp");
         warpOut = gameObject.FindGameObjectInChildren("Warp Out");
         flash = gameObject.FindGameObjectInChildren("White Flash");
-        for (int i = 0; i < 150; i++) {
+        for (int i = 0; i < 150; i++)
+        {
             blankSaws.Enqueue(Instantiate(sawPrefab));
         }
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < 20; i++)
+        {
             var stomper = Instantiate(stomperPrefab);
             stomper.GetComponent<Animator>().enabled = false;
             stomper.LocateMyFSM("damages_hero").enabled = false;
@@ -67,7 +77,8 @@ internal partial class HuStateMachine : EntityStateMachine {
         }
         HPManager = gameObject.GetComponent<HealthManager>();
         HPManager.hp = 1001;
-        if (BossSceneController.Instance.BossLevel > 0) {
+        if (BossSceneController.Instance.BossLevel > 0)
+        {
             HPManager.hp = 1501;
         }
         originalHp = HPManager.hp;
@@ -76,7 +87,8 @@ internal partial class HuStateMachine : EntityStateMachine {
 
     protected override void EntityStateMachineUpdate() { }
 
-    private GameObject Target() {
+    private GameObject Target()
+    {
         return HeroController.instance.gameObject;
     }
 
