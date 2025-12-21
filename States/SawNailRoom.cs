@@ -8,102 +8,149 @@ namespace HuKing;
 
 internal partial class HuStateMachine : EntityStateMachine
 {
+    private GameObject[] platFrame = new GameObject[3];
     [State]
     private IEnumerator<Transition> SawNailRoom()
     {
-        //HuKing.instance.Log("Entering SawRoom state");
-        SawNailGenerateSaw();
         yield return new ToState { State = nameof(Appear) };
     }
-    private void SawNailGenerateSaw()
+    private void registerSawNailRoom()
     {
-        SetSawFrameToHeroCenter();
-        sawFrame.SetActive(true);
+        skillTable.Add(nameof(SawNailRoom), new SkillPhases(
+            () => Appear_SawNailRoom(),
+            () => Loop_SawNailRoom(),
+            () => Disappear_SawNailRoom()
+        ));
+        InitializePlatFrame();
     }
-    private IEnumerator SawNailLoop()
+    private IEnumerator<Transition> Appear_SawNailRoom()
+    {
+        SetPlatFrameToHeroCenter();
+        HuKing.instance.Log($"appearing SawNailRoom level {level}");
+        platFrame[level - 1].SetActive(true);
+        yield return null;
+    }
+    private IEnumerator<Transition> Disappear_SawNailRoom()
+    {
+        HuKing.instance.Log($"Disappearing SawNailRoom level {level}");
+        platFrame[level - 1].SetActive(false);
+        yield return null;
+    }
+    [State]
+    private IEnumerator<Transition> Loop_SawNailRoom()
     {
         yield return null;
     }
-
-    private void InitializeSawFrame()
+    private void InitializePlatFrame()
     {
-        sawFrame = new GameObject("SawFrame");
-
-        // 添加刚体，这是实现“子碰撞箱、父脚本”的关键
-        var rb = sawFrame.AddComponent<Rigidbody2D>();
-        rb.bodyType = RigidbodyType2D.Kinematic; // 不受重力，由代码控制移动
-        rb.simulated = true;
-
-        // 只在父物体上挂一个脚本
-        var responder = sawFrame.AddComponent<SawFrameResponder>();
-        responder.OnBeenHit = (direction) =>
+        for (int i = 0; i < 3; i++)
         {
-            // 这里可以加一个简单的冷却（CD），防止同一帧内多次位移
-            StartCoroutine(MoveFrame(direction));
+            platFrame[i] = new GameObject($"PlatFrame_Level_{i + 1}");
+        }
+        CreatePlatSquare(8f, platFrame[0]);
+        CreatePlatSquare(6f, platFrame[1]);
+        CreatePlatSquare(4f, platFrame[2]);
+        HuKing.instance.Log("PlatFrame_Container created");
+    }
+    private void CreatePlatSquare(float size, GameObject parent)
+    {
+        var rb = parent.AddComponent<Rigidbody2D>();
+        rb.bodyType = RigidbodyType2D.Kinematic;
+        rb.simulated = true;
+        parent.layer = (int)GlobalEnums.PhysLayers.TERRAIN;
+
+        var mainResponder = parent.AddComponent<PlatFrameResponder>();
+        mainResponder.OnBeenHit = (direction) =>
+        {
+            StartCoroutine(MoveFrame(direction, parent));
         };
 
-        CreateSawSquare(6);
+        float offset = size / 2f;
+        float thickness = 0.95f;
+
+        Vector3 baseScale = new Vector3(size * 0.25f, thickness, 1);
+
+        CreatePlatformEdge(parent, new Vector3(0, -offset, 0), baseScale, 0f);
+        CreatePlatformEdge(parent, new Vector3(-offset, 0, 0), baseScale, -90f);
+        CreatePlatformEdge(parent, new Vector3(offset, 0, 0), baseScale, 90f);
+        CreatePlatformEdge(parent, new Vector3(0, offset, 0), baseScale, 180f);
+
+        parent.SetActive(false);
     }
-    private void CreateSawSquare(int size)
+
+    private void CreatePlatformEdge(GameObject parent, Vector3 localPos, Vector3 scale, float rotationZ)
     {
-        // 间距建议稍微大于 1.0，防止电锯挨得太紧（如果不希望间距随 sawSize 变化，就固定一个值）
-        float step = 1.2f;
-        float offset = (size - 1) * step / 2f;
+        GameObject edge = Instantiate(platPrefab, parent.transform);
+        edge.transform.localPosition = localPos;
+        edge.transform.localScale = scale;
 
-        for (int i = 0; i < size; i++)
+        edge.transform.localRotation = Quaternion.Euler(0, 0, rotationZ);
+        edge.layer = (int)GlobalEnums.PhysLayers.TERRAIN;
+        var edgeResponder = edge.AddComponent<PlatFrameResponder>();
+        edgeResponder.OnBeenHit = (dir) =>
         {
-            for (int j = 0; j < size; j++)
-            {
-                // 只有四条边生成电锯
-                if (i == 0 || i == size - 1 || j == 0 || j == size - 1)
-                {
-                    GameObject saw = Instantiate(sawPrefab, sawFrame.transform);
-
-                    // --- 解决问题 1：强制激活子电锯 ---
-                    saw.SetActive(true);
-
-                    // --- 解决问题 2：设置电锯个体的大小 ---
-                    // 只修改这个电锯实例的缩放，不影响父物体的坐标计算
-                    saw.transform.localScale = new Vector3(sawSize, sawSize, 1f);
-
-                    // 设置位置（相对于父物体中心）
-                    float x = i * step - offset;
-                    float y = j * step - offset;
-                    saw.transform.localPosition = new Vector2(x, y);
-
-                    // 物理与逻辑设置
-                    saw.layer = (int)GlobalEnums.PhysLayers.ENEMIES;
-                    var col = saw.GetComponent<Collider2D>();
-                    if (col != null) col.isTrigger = true;
-
-                    // 如果电锯有动画/音效逻辑，顺便触发它
-                    var fsm = saw.GetComponent<PlayMakerFSM>();
-                    if (fsm != null) fsm.SendEvent("SPAWN");
-                }
-            }
-        }
+            parent.GetComponent<PlatFrameResponder>().OnBeenHit?.Invoke(dir);
+        };
+        edge.SetActive(true);
     }
     private bool isMoving = false;
 
-    private System.Collections.IEnumerator MoveFrame(Vector2 direction)
+    private IEnumerator MoveFrame(Vector2 direction, GameObject targetFrame)
     {
-        if (isMoving) yield break; // 如果正在移动处理中，忽略多余的打击
+        if (isMoving) yield break;
         isMoving = true;
 
-        // 执行移动
-        sawFrame.transform.position += (Vector3)direction * 0.5f;
+        Rigidbody2D rb = targetFrame.GetComponent<Rigidbody2D>();
+        Vector3 startPos = targetFrame.transform.position;
 
-        // 等待一小会儿（或者等到下一帧）
-        yield return new WaitForSeconds(0.05f);
+        float currentSize = 8f;
+        if (level == 2) currentSize = 6f;
+        if (level == 3) currentSize = 4f;
+
+        float maxMoveDist = 1.51f;
+        Vector2 boxSize = new Vector2(currentSize * 0.9f, currentSize * 0.9f); // 稍微缩一点，避免摩擦侧墙
+
+        RaycastHit2D hit = Physics2D.BoxCast(startPos, boxSize, 0f, direction, maxMoveDist, 1 << 8);
+
+        float finalMoveDist = maxMoveDist;
+
+        if (hit.collider != null)
+        {
+            finalMoveDist = Mathf.Max(0, hit.distance - 0.05f);
+        }
+        if (direction.y > 0.1f)
+        {
+            float remainingDist = upWall - startPos.y;
+            finalMoveDist = Mathf.Min(finalMoveDist, Mathf.Max(0, remainingDist));
+        }
+        Vector3 targetPos = startPos + (Vector3)direction * finalMoveDist;
+
+        float elapsed = 0f;
+        float duration = 0.1f;
+
+        while (elapsed < duration)
+        {
+            if (targetFrame == null) yield break;
+            elapsed += Time.deltaTime;
+
+            float t = elapsed / duration;
+            float easedT = Mathf.SmoothStep(0, 1, t);
+            Vector3 nextPos = Vector3.Lerp(startPos, targetPos, easedT);
+            rb.MovePosition(nextPos);
+
+            yield return null;
+        }
+
+        rb.MovePosition(targetPos);
         isMoving = false;
     }
-    public void SetSawFrameToHeroCenter()
+    public void SetPlatFrameToHeroCenter()
     {
-        if (sawFrame == null) return;
+        if (platFrame[level - 1] == null) return;
 
         Vector3 heroPos = HeroController.instance.transform.position;
-        sawFrame.transform.position = heroPos;
-
+        platFrame[level - 1].transform.position = heroPos;
+        HuKing.instance.Log("PlatFrame positioned to Hero center");
         isMoving = false;
     }
 }

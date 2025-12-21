@@ -1,4 +1,5 @@
 using HutongGames.PlayMaker.Actions;
+using MonoMod.Utils;
 using RingLib;
 using RingLib.StateMachine;
 using Satchel;
@@ -10,9 +11,8 @@ internal partial class HuStateMachine : EntityStateMachine
 {
     private Config config = new();
     private tk2dSpriteAnimator animator = new();
-    private GameObject sawPrefab, ringPrefab, beam, stomperPrefab;
+    private GameObject sawPrefab, ringPrefab, beam, stomperPrefab, platPrefab;
     private GameObject warpIn, warpOut, flash;
-    private GameObject sawFrame;
     private bool enableShining = true;
     static private float leftWall = 32f, rightWall = 66f, downWall = 2.5f, upWall = 17f;
     private Queue<GameObject> saws = new();
@@ -25,6 +25,7 @@ internal partial class HuStateMachine : EntityStateMachine
     private int hitCount = 0;
     private float sawSize = 0.3f;
     private string SkillChoosen = "None";
+    private int level = 1;
     private Dictionary<string, SkillPhases> skillTable = new Dictionary<string, SkillPhases>();
 
     public HuStateMachine() : base(
@@ -36,16 +37,24 @@ internal partial class HuStateMachine : EntityStateMachine
         spriteFacingLeft: true)
     {
     }
-    public void init(GameObject sawPrefab, GameObject ringPrefab, GameObject beamPrefab, GameObject stomperPrefab, float sawsize, bool enableShining)
+    public void init(GameObject sawPrefab, GameObject ringPrefab, GameObject beamPrefab, GameObject stomperPrefab, GameObject plat, float sawsize, bool enableShining)
     {
         this.sawPrefab = sawPrefab;
         this.ringPrefab = ringPrefab;
         this.beam = Instantiate(beamPrefab);
         this.stomperPrefab = stomperPrefab;
+        this.platPrefab = plat;
         this.sawSize = sawsize;
         this.enableShining = enableShining;
         registerSawRoom();
         registerBoxRoom();
+        registerSawNailRoom();
+        var rb = GetComponent<Rigidbody2D>();
+        rb.bodyType = RigidbodyType2D.Kinematic;
+    }
+    protected override void EntityStateMachineFixedUpdate()
+    {
+        Modding.ReflectionHelper.SetField(HeroController.instance, "nailChargeTimer", 0f);
     }
 
     protected override void EntityStateMachineStart()
@@ -84,8 +93,6 @@ internal partial class HuStateMachine : EntityStateMachine
         originalHp = HPManager.hp;
         //HuKing.instance.Log("HuStateMachine Initialized");
     }
-
-    protected override void EntityStateMachineUpdate() { }
 
     private GameObject Target()
     {

@@ -11,13 +11,15 @@ using UnityEngine;
 namespace HuKing;
 
 [Serializable]
-public class Settings {
+public class Settings
+{
     public bool on = true;
     public bool lowPerformanceMode = false;
     public bool enableShining = true;
 }
 
-public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod {
+public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod
+{
     public static HuKing instance;
 
     private GameObject sawPrefab;
@@ -25,10 +27,12 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod {
     private GameObject ringPrefab;
     private GameObject beamPrefab;
     private GameObject stomperPrefab;
+    private GameObject plat;
     /*  
      * ******** Mod名字和版本号 ********
      */
-    public HuKing() : base("HuKing") {
+    public HuKing() : base("HuKing")
+    {
         instance = this;
     }
     public override string GetVersion() => "1.0";
@@ -36,47 +40,59 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod {
     /* 
      * ******** 预加载和hook ********
      */
-    public override List<(string, string)> GetPreloadNames() {
+    public override List<(string, string)> GetPreloadNames()
+    {
         return new List<(string, string)> {
             ("White_Palace_05", "wp_saw"),
             ("White_Palace_03_hub", "White_ Spikes"),
             ("GG_Ghost_Hu", "Ring Holder/1"),
             ("GG_Radiance","Boss Control/Absolute Radiance/Eye Beam Glow/Burst 1/Radiant Beam"),
-            ("Mines_19","_Scenery/stomper_1/mines_stomper_02")
+            ("Mines_19","_Scenery/stomper_1/mines_stomper_02"),
+            ("GG_Workshop", "gg_plat_float_wide")
         };
     }
-    public override void Initialize(Dictionary<string, Dictionary<string, GameObject>> preloadedObjects) {
+    public override void Initialize(Dictionary<string, Dictionary<string, GameObject>> preloadedObjects)
+    {
         On.PlayMakerFSM.OnEnable += PlayMakerFSM_OnEnable;
         sawPrefab = preloadedObjects["White_Palace_05"]["wp_saw"];
         spikePrefab = preloadedObjects["White_Palace_03_hub"]["White_ Spikes"];
         ringPrefab = preloadedObjects["GG_Ghost_Hu"]["Ring Holder/1"];
         beamPrefab = preloadedObjects["GG_Radiance"]["Boss Control/Absolute Radiance/Eye Beam Glow/Burst 1/Radiant Beam"];
         stomperPrefab = preloadedObjects["Mines_19"]["_Scenery/stomper_1/mines_stomper_02"];
-
+        plat = preloadedObjects["GG_Workshop"]["gg_plat_float_wide"];
         ModHooks.LanguageGetHook += changeName;
     }
-    private string changeName(string key, string title, string orig) {
-        if ((key == "GH_HU_C_MAIN" || key == "GH_HU_NC_MAIN" || key == "NAME_GHOST_HU") && mySettings.on) {
+    private string changeName(string key, string title, string orig)
+    {
+        if ((key == "GH_HU_C_MAIN" || key == "GH_HU_NC_MAIN" || key == "NAME_GHOST_HU") && mySettings.on)
+        {
             return "胡王";
         }
         return orig;
     }
 
     [Obsolete]
-    private void PlayMakerFSM_OnEnable(On.PlayMakerFSM.orig_OnEnable orig, PlayMakerFSM self) {
-        if (mySettings.on) {
-            if (self.gameObject.scene.name == "GG_Ghost_Hu" && self.gameObject.name == "Ghost Warrior Hu") {
-                if (self.FsmName == "Attacking") {
+    private void PlayMakerFSM_OnEnable(On.PlayMakerFSM.orig_OnEnable orig, PlayMakerFSM self)
+    {
+        if (mySettings.on)
+        {
+            if (self.gameObject.scene.name == "GG_Ghost_Hu" && self.gameObject.name == "Ghost Warrior Hu")
+            {
+                if (self.FsmName == "Attacking")
+                {
                     Log("enable HuKing");
                     self.enabled = false;
-                    if (mySettings.lowPerformanceMode) {
-                        self.gameObject.AddComponent<HuStateMachine>().init(spikePrefab, ringPrefab, beamPrefab, stomperPrefab, 0.7f, mySettings.enableShining);
+                    if (mySettings.lowPerformanceMode)
+                    {
+                        self.gameObject.AddComponent<HuStateMachine>().init(spikePrefab, ringPrefab, beamPrefab, stomperPrefab, plat, 0.7f, mySettings.enableShining);
                     }
-                    else {
-                        self.gameObject.AddComponent<HuStateMachine>().init(sawPrefab, ringPrefab, beamPrefab, stomperPrefab, 0.3f, mySettings.enableShining);
+                    else
+                    {
+                        self.gameObject.AddComponent<HuStateMachine>().init(sawPrefab, ringPrefab, beamPrefab, stomperPrefab, plat, 0.3f, mySettings.enableShining);
                     }
                 }
-                if (self.FsmName == "Movement") {
+                if (self.FsmName == "Movement")
+                {
                     self.enabled = false;
                 }
 
@@ -95,10 +111,12 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod {
     // 写入配置文件
     public Settings OnSaveGlobal() => mySettings;
     // 设置菜单格式
-    public List<IMenuMod.MenuEntry> GetMenuData(IMenuMod.MenuEntry? menu) {
+    public List<IMenuMod.MenuEntry> GetMenuData(IMenuMod.MenuEntry? menu)
+    {
         List<IMenuMod.MenuEntry> menus = new();
         menus.Add(
-            new() {
+            new()
+            {
                 // 这是个单选菜单，这里提供开和关两种选择。
                 Values = new string[]
                 {
@@ -112,7 +130,8 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod {
             }
         );
         menus.Add(
-            new() {
+            new()
+            {
                 Values = new string[]
                 {
                     Language.Language.Get("MOH_ON", "MainMenu"),
@@ -124,7 +143,8 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod {
             }
         );
         menus.Add(
-            new() {
+            new()
+            {
                 Values = new string[]
                 {
                     Language.Language.Get("MOH_ON", "MainMenu"),

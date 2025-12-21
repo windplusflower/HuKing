@@ -12,7 +12,6 @@ internal partial class HuStateMachine : EntityStateMachine
     [State]
     private IEnumerator<Transition> BoxRoom()
     {
-        //HuKing.instance.Log("BoxRoom state entered");
         yield return new ToState { State = nameof(Appear) };
     }
     private void registerBoxRoom()
@@ -25,13 +24,9 @@ internal partial class HuStateMachine : EntityStateMachine
     }
     private IEnumerator Loop_BoxRoom()
     {
-        HuKing.instance.Log("BoxLoop started");
         mCoroutines.Add(StartCoroutine(ShotBeamLoop()));
         mCoroutines.Add(StartCoroutine(StomperLoop()));
-        while (true)
-        {
-            yield return null;
-        }
+        yield return null;
     }
     private IEnumerator ShotBeamLoop()
     {
@@ -58,14 +53,14 @@ internal partial class HuStateMachine : EntityStateMachine
         speedRate = 5f;
         while (true)
         {
-            var isRandom = HPManager.hp <= originalHp / 3;
+            var isRandom = level > 2;
             var stomper = stompers.Dequeue();
             var heightScale = UnityEngine.Random.Range(1f, 2.8f);
             stomper.GetComponent<StomperStateMachine>().init(heightScale, -1f, speedRate, isRandom);
             stomper.SetActive(true);
             stompers.Enqueue(stomper);
 
-            if (HPManager.hp <= originalHp * 2 / 3)
+            if (level > 1)
             {
                 stomper = stompers.Dequeue();
                 heightScale = UnityEngine.Random.Range(1f, 3.8f - heightScale);

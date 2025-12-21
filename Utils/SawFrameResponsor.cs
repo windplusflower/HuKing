@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // 挂在电锯边框父物体上的脚本
-public class SawFrameResponder : MonoBehaviour, IHitResponder
+public class PlatFrameResponder : MonoBehaviour, IHitResponder
 {
     // 定义一个动作，当被打时通知 Boss
     public System.Action<Vector2> OnBeenHit;
