@@ -30,46 +30,59 @@ internal partial class HuStateMachine : EntityStateMachine
     {
         HeroController.instance.RelinquishControl();
 
+        // 强制清空速度，防止起始瞬间的惯性干扰
+        var rb = Target().GetComponent<Rigidbody2D>();
+        rb.velocity = Vector2.zero;
+        rb.gravityScale = 0;
+
         var ring = Instantiate(ringPrefab);
-        ring.transform.parent = Target().transform;
-        ring.transform.localPosition = new Vector3(0, 3.5f, 0);
-        var player = ring.GetComponent<tk2dSpriteAnimator>();
-        var fsm = ring.LocateMyFSM("Control");
-        for (int i = 0; i < 4; i++)
-            fsm.RemoveAction("Init", 0);
-        fsm.RemoveTransition("Init", "FINISHED");
-        ring.SetActive(true);
-        player.Play("Ring Antic 1");
-        player.Play("Ring Antic 2");
-
-        var V = targetKnightPosition - Target().transform.position;
-        var pasttime = 0f;
-        Target().GetComponent<Rigidbody2D>().gravityScale = 0;
-
-        var wpin = Instantiate(warpIn);
-        wpin.transform.position = Target().transform.position;
-        for (int i = 0; i < 5; i++)
+        try
         {
+            ring.transform.parent = Target().transform;
+            ring.transform.localPosition = new Vector3(0, 3.5f, 0);
+
+            var player = ring.GetComponent<tk2dSpriteAnimator>();
+            var fsm = ring.LocateMyFSM("Control");
+            fsm.enabled = false;
+
+            ring.SetActive(true);
+            player.Play("Ring Antic 1");
+            player.Play("Ring Antic 2");
+
+            Vector3 startPos = Target().transform.position;
+            Vector3 endPos = targetKnightPosition;
+
+            var pasttime = 0f;
+
+            var wpin = Instantiate(warpIn);
+            wpin.transform.position = startPos;
             wpin.SetActive(true);
-            yield return new WaitFor { Seconds = 0.1f };
+            Destroy(wpin, 0.5f);
+
+            while (pasttime < moveTime)
+            {
+                pasttime += Time.deltaTime;
+                float t = pasttime / moveTime;
+
+                float easedT = Mathf.SmoothStep(0, 1, t);
+
+                Target().transform.position = Vector3.Lerp(startPos, endPos, easedT);
+
+                yield return new NoTransition();
+            }
+
+            Target().transform.position = endPos;
         }
-
-        Destroy(wpin);
-
-        while (pasttime < moveTime)
+        finally
         {
-            pasttime += Time.deltaTime;
-            Target().transform.position += V * (Time.deltaTime / moveTime);
-            yield return new NoTransition();
+            if (ring != null) Destroy(ring);
+            rb.gravityScale = 1;
+            HeroController.instance.RegainControl();
+            PlayerData.instance.SetHazardRespawn(targetKnightPosition, true);
         }
 
-        Target().GetComponent<Rigidbody2D>().gravityScale = 1;
-        HeroController.instance.RegainControl();
-        PlayerData.instance.SetHazardRespawn(targetKnightPosition, true);
-        Destroy(ring);
         if (enableShining)
         {
-
             var fsh = Instantiate(warpIn);
             fsh.transform.position = new Vector3((leftWall + rightWall) / 2f, (upWall + downWall) / 2f, 0);
             fsh.transform.localScale = new Vector3(20f, 5f, 1);

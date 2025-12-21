@@ -9,6 +9,8 @@ namespace HuKing;
 internal partial class HuStateMachine : EntityStateMachine
 {
     private GameObject[] platFrame = new GameObject[3];
+    private Queue<GameObject> nailPool = new Queue<GameObject>();
+    private const int POOL_SIZE = 15;
     [State]
     private IEnumerator<Transition> SawNailRoom()
     {
@@ -22,6 +24,23 @@ internal partial class HuStateMachine : EntityStateMachine
             () => Disappear_SawNailRoom()
         ));
         InitializePlatFrame();
+        if (nailPool.Count > 0) return;
+
+        for (int i = 0; i < POOL_SIZE; i++)
+        {
+            GameObject nail = Instantiate(nailPrefab);
+            nail.SetActive(false);
+            DontDestroyOnLoad(nail);
+
+            PlayMakerFSM fsm = nail.LocateMyFSM("Control");
+            if (fsm != null)
+            {
+                fsm.CopyState("Fan Antic", "Prepare");
+                fsm.AddGlobalTransition("FORCE_START", "Prepare");
+                fsm.ChangeTransition("Prepare", "FINISHED", "Idle");
+            }
+            nailPool.Enqueue(nail);
+        }
     }
     private IEnumerator<Transition> Appear_SawNailRoom()
     {
@@ -34,12 +53,85 @@ internal partial class HuStateMachine : EntityStateMachine
     {
         HuKing.instance.Log($"Disappearing SawNailRoom level {level}");
         platFrame[level - 1].SetActive(false);
+        foreach (var nail in nailPool)
+        {
+            if (nail != null)
+            {
+                nail.SetActive(false);
+            }
+        }
         yield return null;
     }
-    [State]
-    private IEnumerator<Transition> Loop_SawNailRoom()
+    private IEnumerator Loop_SawNailRoom()
     {
-        yield return null;
+        while (true)
+        {
+            for (int i = 0; i <= level; i++)
+                StartCoroutine(FireNailCoroutine(HeroController.instance.transform.position, new Rect(leftWall, downWall, rightWall - leftWall, upWall - downWall)));
+            yield return new WaitForSeconds(1.5f);
+        }
+    }
+    private IEnumerator FireNailCoroutine(Vector3 heroPos, Rect battleArea)
+    {
+        if (nailPool.Count == 0) yield break;
+        GameObject nail = nailPool.Dequeue();
+        nailPool.Enqueue(nail);
+
+        nail.SetActive(false);
+
+        var rb = nail.GetComponent<Rigidbody2D>();
+        var col = nail.GetComponent<Collider2D>();
+        var fsm = nail.LocateMyFSM("Control");
+
+        if (col != null) { col.enabled = true; col.isTrigger = true; }
+        if (rb != null) { rb.isKinematic = false; rb.velocity = Vector2.zero; }
+
+        Vector3 spawnPos = Vector3.zero;
+        bool found = false;
+        float radius = 16f;
+
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2);
+            Vector3 offset = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0) * radius;
+            Vector3 pos = heroPos + offset;
+            if (battleArea.Contains(pos))
+            {
+                spawnPos = pos;
+                found = true;
+                break;
+            }
+        }
+        if (!found) spawnPos = heroPos + Vector3.up * radius;
+
+        Vector2 errorOffset = UnityEngine.Random.insideUnitCircle * 2.0f;
+        Vector3 targetPosWithError = heroPos + (Vector3)errorOffset;
+        Vector2 direction = (targetPosWithError - spawnPos).normalized;
+        float lookAngle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+
+        nail.transform.position = spawnPos;
+        nail.transform.eulerAngles = new Vector3(0, 0, lookAngle - 90f);
+
+        if (fsm != null)
+        {
+            fsm.enabled = true;
+            fsm.SendEvent("FORCE_START");
+        }
+
+        nail.SetActive(true);
+        yield return new WaitForSeconds(0.8f);
+
+        if (rb != null) rb.velocity = direction * 35f;
+
+        yield return new WaitForSeconds(2.0f);
+
+        if (fsm != null)
+        {
+            fsm.SendEvent("TO_RECYCLE");
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        nail.SetActive(false);
     }
     private void InitializePlatFrame()
     {
@@ -150,7 +242,6 @@ internal partial class HuStateMachine : EntityStateMachine
 
         Vector3 heroPos = HeroController.instance.transform.position;
         platFrame[level - 1].transform.position = heroPos;
-        HuKing.instance.Log("PlatFrame positioned to Hero center");
         isMoving = false;
     }
 }

@@ -27,7 +27,8 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod
     private GameObject ringPrefab;
     private GameObject beamPrefab;
     private GameObject stomperPrefab;
-    private GameObject plat;
+    private GameObject platPrefab;
+    private GameObject nailPrefab;
     /*  
      * ******** Mod名字和版本号 ********
      */
@@ -48,7 +49,9 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod
             ("GG_Ghost_Hu", "Ring Holder/1"),
             ("GG_Radiance","Boss Control/Absolute Radiance/Eye Beam Glow/Burst 1/Radiant Beam"),
             ("Mines_19","_Scenery/stomper_1/mines_stomper_02"),
-            ("GG_Workshop", "gg_plat_float_wide")
+            ("GG_Workshop", "gg_plat_float_wide"),
+            ("DontDestroyOnLoad","_GameManager/GlobalPool/Radiant Nail(Clone)"),
+            ("GG_Radiance", "Boss Control/Absolute Radiance"),
         };
     }
     public override void Initialize(Dictionary<string, Dictionary<string, GameObject>> preloadedObjects)
@@ -59,7 +62,14 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod
         ringPrefab = preloadedObjects["GG_Ghost_Hu"]["Ring Holder/1"];
         beamPrefab = preloadedObjects["GG_Radiance"]["Boss Control/Absolute Radiance/Eye Beam Glow/Burst 1/Radiant Beam"];
         stomperPrefab = preloadedObjects["Mines_19"]["_Scenery/stomper_1/mines_stomper_02"];
-        plat = preloadedObjects["GG_Workshop"]["gg_plat_float_wide"];
+        platPrefab = preloadedObjects["GG_Workshop"]["gg_plat_float_wide"];
+
+        var radiance = preloadedObjects["GG_Radiance"]["Boss Control/Absolute Radiance"];
+        var radianceFSM = radiance.LocateMyFSM("Attack Commands"); var nailComb = radianceFSM.GetAction<SpawnObjectFromGlobalPool>("Comb Top", 0).gameObject.Value;
+        var nailCombFSM = nailComb.LocateMyFSM("Control");
+        nailPrefab = nailCombFSM.GetAction<SpawnObjectFromGlobalPool>("RG1", 1).gameObject.Value;
+        GameObject.Destroy(nailPrefab.GetComponent<PersistentBoolItem>());
+        GameObject.Destroy(nailPrefab.GetComponent<ConstrainPosition>());
         ModHooks.LanguageGetHook += changeName;
     }
     private string changeName(string key, string title, string orig)
@@ -84,11 +94,11 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod
                     self.enabled = false;
                     if (mySettings.lowPerformanceMode)
                     {
-                        self.gameObject.AddComponent<HuStateMachine>().init(spikePrefab, ringPrefab, beamPrefab, stomperPrefab, plat, 0.7f, mySettings.enableShining);
+                        self.gameObject.AddComponent<HuStateMachine>().init(spikePrefab, ringPrefab, beamPrefab, stomperPrefab, platPrefab, nailPrefab, 0.7f, mySettings.enableShining);
                     }
                     else
                     {
-                        self.gameObject.AddComponent<HuStateMachine>().init(sawPrefab, ringPrefab, beamPrefab, stomperPrefab, plat, 0.3f, mySettings.enableShining);
+                        self.gameObject.AddComponent<HuStateMachine>().init(sawPrefab, ringPrefab, beamPrefab, stomperPrefab, platPrefab, nailPrefab, 0.3f, mySettings.enableShining);
                     }
                 }
                 if (self.FsmName == "Movement")
