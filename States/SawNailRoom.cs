@@ -11,6 +11,7 @@ internal partial class HuStateMachine : EntityStateMachine
     private GameObject[] platFrame = new GameObject[3];
     private Queue<GameObject> nailPool = new Queue<GameObject>();
     private const int POOL_SIZE = 15;
+    private List<UnityEngine.Coroutine> activeNailRoutines = new List<UnityEngine.Coroutine>();
     [State]
     private IEnumerator<Transition> SawNailRoom()
     {
@@ -41,6 +42,9 @@ internal partial class HuStateMachine : EntityStateMachine
             }
             nailPool.Enqueue(nail);
         }
+        On.HeroController.CanWallJump += OnCanWallJump;
+        On.HeroController.CanWallSlide += OnCanWallSlide;
+        On.HeroController.Attack += OnHeroAttack;
     }
     private IEnumerator<Transition> Appear_SawNailRoom()
     {
@@ -49,36 +53,83 @@ internal partial class HuStateMachine : EntityStateMachine
         platFrame[level - 1].SetActive(true);
         yield return null;
     }
+    [State]
     private IEnumerator<Transition> Disappear_SawNailRoom()
     {
-        HuKing.instance.Log($"Disappearing SawNailRoom level {level}");
-        platFrame[level - 1].SetActive(false);
-        foreach (var nail in nailPool)
+        // 1. 停止所有追踪的协程
+        if (activeNailRoutines != null)
         {
-            if (nail != null)
+            foreach (var routine in activeNailRoutines)
             {
-                nail.SetActive(false);
+                if (routine != null) StopCoroutine(routine);
+            }
+            activeNailRoutines.Clear();
+        }
+
+        // 2. 停止并还原小骑士音效 (使用 instance)
+        var hc = HeroController.instance;
+        if (hc != null)
+        {
+            var ha = hc.GetComponent<HeroAudioController>();
+            if (ha != null)
+            {
+                if (ha.dash != null)
+                {
+                    ha.dash.Stop();
+                    ha.dash.pitch = 1f;
+                    ha.dash.spatialBlend = 0.9f;
+                }
+                if (ha.jump != null)
+                {
+                    ha.jump.Stop();
+                    ha.jump.pitch = 1f;
+                }
             }
         }
+
+        // 3. 隐藏飞刺并清理残留红线
+        if (nailPool != null)
+        {
+            foreach (var nail in nailPool)
+            {
+                if (nail != null)
+                {
+                    Transform line = nail.transform.Find("AimLine");
+                    if (line != null) Destroy(line.gameObject);
+                    nail.SetActive(false);
+                }
+            }
+        }
+
+        // 4. 隐藏平台
+        if (platFrame != null)
+        {
+            foreach (var plat in platFrame)
+            {
+                if (plat != null) plat.SetActive(false);
+            }
+        }
+
         yield return null;
     }
     private IEnumerator Loop_SawNailRoom()
     {
         while (true)
         {
+            // 每次启动发射协程时，都将其句柄加入列表
             for (int i = 0; i < 2; i++)
             {
-                StartCoroutine(FireNail_RandomCircle(HeroController.instance.transform.position, GetBattleArea()));
+                activeNailRoutines.Add(StartCoroutine(FireNail_RandomCircle(HeroController.instance.transform.position, GetBattleArea())));
             }
 
             if (level >= 2)
             {
-                StartCoroutine(FireNail_Horizontal(HeroController.instance.transform.position, GetBattleArea()));
+                activeNailRoutines.Add(StartCoroutine(FireNail_Horizontal(HeroController.instance.transform.position, GetBattleArea())));
             }
 
             if (level >= 3)
             {
-                StartCoroutine(FireNail_Vertical(HeroController.instance.transform.position, GetBattleArea()));
+                activeNailRoutines.Add(StartCoroutine(FireNail_Vertical(HeroController.instance.transform.position, GetBattleArea())));
             }
 
             yield return new WaitForSeconds(1.5f);
@@ -134,81 +185,67 @@ internal partial class HuStateMachine : EntityStateMachine
     }
     private IEnumerator LaunchNail(Vector3 spawnPos, Vector2 moveDirection, float lookAngleOffset = -90f)
     {
-        if (nailPool.Count == 0) yield break;
+        if (nailPool == null || nailPool.Count == 0) yield break;
         GameObject nail = nailPool.Dequeue();
         nailPool.Enqueue(nail);
-
         nail.SetActive(false);
+
         var rb = nail.GetComponent<Rigidbody2D>();
-        var fsm = nail.LocateMyFSM("Control");
+        // 直接获取 HeroAudioController
+        var ha = (HeroController.instance != null) ? HeroController.instance.GetComponent<HeroAudioController>() : null;
 
         nail.transform.position = spawnPos;
+        float lookAngle = Mathf.Atan2(moveDirection.y, moveDirection.x) * Mathf.Rad2Deg;
+        nail.transform.eulerAngles = new Vector3(0, 0, lookAngle + lookAngleOffset);
 
-        if (moveDirection == Vector2.right) nail.transform.eulerAngles = new Vector3(0, 0, 270f);
-        else if (moveDirection == Vector2.left) nail.transform.eulerAngles = new Vector3(0, 0, 90f);
-        else if (moveDirection == Vector2.up) nail.transform.eulerAngles = new Vector3(0, 0, 0f);
-        else if (moveDirection == Vector2.down) nail.transform.eulerAngles = new Vector3(0, 0, 180f);
-        else
-        {
-            float lookAngle = Mathf.Atan2(moveDirection.y, moveDirection.x) * Mathf.Rad2Deg;
-            nail.transform.eulerAngles = new Vector3(0, 0, lookAngle + lookAngleOffset);
-        }
-
-        var trail = nail.GetComponentInChildren<TrailRenderer>();
-        if (trail != null)
-        {
-            trail.Clear();
-            trail.emitting = false;
-        }
-
-        if (fsm != null)
-        {
-            fsm.enabled = true;
-            fsm.SendEvent("FORCE_START");
-        }
-
+        // --- 视觉预警 (无声音) ---
         GameObject line = new GameObject("AimLine");
         line.transform.SetParent(nail.transform);
         line.transform.localPosition = Vector3.zero;
-        line.transform.localRotation = Quaternion.identity;
-
         var lr = line.AddComponent<LineRenderer>();
         lr.material = new Material(Shader.Find("Sprites/Default"));
-        lr.startWidth = 0.15f;
-        lr.endWidth = 0.15f;
-        lr.positionCount = 2;
-        lr.useWorldSpace = true;
+        lr.startWidth = 0.15f; lr.endWidth = 0.15f;
         lr.SetPosition(0, spawnPos);
         lr.SetPosition(1, spawnPos + (Vector3)moveDirection * 60f);
 
         nail.SetActive(true);
 
-        float elapsed = 0f;
-        while (elapsed < 1.0f)
+        float timer = 0f;
+        while (timer < 0.8f)
         {
-            elapsed += Time.deltaTime;
+            timer += Time.deltaTime;
             if (lr != null)
-            {
-                float alpha = (Mathf.Sin(elapsed * 25f) + 1f) / 2f;
-                lr.startColor = new Color(1f, 0.1f, 0.1f, alpha * 0.8f);
-                lr.endColor = new Color(1f, 0f, 0f, 0f);
-            }
+                lr.startColor = new Color(1, 0, 0, Mathf.PingPong(Time.time * 20, 1));
             yield return null;
         }
 
-        if (line != null) Destroy(line);
+        if (line != null) Destroy(line.gameObject);
 
-        if (trail != null) trail.emitting = true;
+        if (ha != null && ha.dash != null)
+        {
+            ha.dash.Stop();
+            ha.dash.spatialBlend = 0f;
+            ha.dash.pitch = 1.5f;
+            ha.dash.volume = 1f;
+
+            ha.dash.PlayOneShot(ha.dash.clip);
+            ha.dash.PlayOneShot(ha.dash.clip);
+
+            if (ha.jump != null)
+            {
+                ha.jump.pitch = 1.1f;
+                ha.jump.volume = 0.7f;
+                ha.jump.PlayOneShot(ha.jump.clip);
+            }
+        }
 
         if (rb != null)
         {
             rb.isKinematic = false;
-            rb.velocity = moveDirection * 50f;
+            rb.velocity = moveDirection * 60f;
         }
 
         yield return new WaitForSeconds(2.0f);
-
-        if (trail != null) trail.emitting = false;
         nail.SetActive(false);
     }
     private void InitializePlatFrame()
@@ -277,7 +314,7 @@ internal partial class HuStateMachine : EntityStateMachine
         if (level == 2) currentSize = 6f;
         if (level == 3) currentSize = 4f;
 
-        float maxMoveDist = 1.51f;
+        float maxMoveDist = 2f;
         Vector2 boxSize = new Vector2(currentSize * 0.9f, currentSize * 0.9f); // 稍微缩一点，避免摩擦侧墙
 
         RaycastHit2D hit = Physics2D.BoxCast(startPos, boxSize, 0f, direction, maxMoveDist, 1 << 8);
@@ -322,4 +359,49 @@ internal partial class HuStateMachine : EntityStateMachine
         platFrame[level - 1].transform.position = heroPos;
         isMoving = false;
     }
+    private bool IsSawNailSkillActive()
+    {
+        // 遍历所有平台，只要有一个在场，就说明技能正在进行
+        if (platFrame == null) return false;
+        for (int i = 0; i < platFrame.Length; i++)
+        {
+            if (platFrame[i] != null && platFrame[i].activeInHierarchy) return true;
+        }
+        return false;
+    }
+
+    private bool OnCanWallJump(On.HeroController.orig_CanWallJump orig, HeroController self)
+    {
+        if (IsSawNailSkillActive()) return false;
+        return orig(self);
+    }
+
+    private bool OnCanWallSlide(On.HeroController.orig_CanWallSlide orig, HeroController self)
+    {
+        if (IsSawNailSkillActive()) return false;
+        return orig(self);
+    }
+
+    // 核心修复：强制在地面时允许执行下劈逻辑
+    private void OnHeroAttack(On.HeroController.orig_Attack orig, HeroController self, GlobalEnums.AttackDirection attackDir)
+    {
+        // 检查是否在技能期间，且玩家是否按住了“下”键
+        if (IsSawNailSkillActive() && GameManager.instance.inputHandler.inputActions.down.IsPressed)
+        {
+            // 强制将攻击方向改为下劈
+            attackDir = GlobalEnums.AttackDirection.downward;
+
+            // 源码显示 cState 是 public，直接修改
+            bool wasOnGround = self.cState.onGround;
+            if (wasOnGround)
+            {
+                self.cState.onGround = false; // 临时改为不在地面以通过 Attack 内部的潜在拦截
+                orig(self, attackDir);
+                self.cState.onGround = wasOnGround; // 立即还原
+                return;
+            }
+        }
+        orig(self, attackDir);
+    }
+
 }

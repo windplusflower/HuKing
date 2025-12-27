@@ -47,11 +47,6 @@ internal partial class HuStateMachine : EntityStateMachine
         this.nailPrefab = nailPrefab;
         this.sawSize = sawsize;
         this.enableShining = enableShining;
-        registerSawRoom();
-        registerBoxRoom();
-        registerSawNailRoom();
-        var rb = GetComponent<Rigidbody2D>();
-        rb.bodyType = RigidbodyType2D.Kinematic;
     }
     protected override void EntityStateMachineFixedUpdate()
     {
@@ -86,12 +81,17 @@ internal partial class HuStateMachine : EntityStateMachine
             stompers.Enqueue(stomper);
         }
         HPManager = gameObject.GetComponent<HealthManager>();
-        HPManager.hp = 1001;
+        HPManager.hp = 601;
         if (BossSceneController.Instance.BossLevel > 0)
         {
-            HPManager.hp = 1501;
+            HPManager.hp = 601;
         }
         originalHp = HPManager.hp;
+        registerSawRoom();
+        registerBoxRoom();
+        registerSawNailRoom();
+        var rb = GetComponent<Rigidbody2D>();
+        rb.bodyType = RigidbodyType2D.Kinematic;
         //HuKing.instance.Log("HuStateMachine Initialized");
     }
 
