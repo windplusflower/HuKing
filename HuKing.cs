@@ -50,7 +50,6 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod
             ("GG_Radiance","Boss Control/Absolute Radiance/Eye Beam Glow/Burst 1/Radiant Beam"),
             ("Mines_19","_Scenery/stomper_1/mines_stomper_02"),
             ("GG_Workshop", "gg_plat_float_wide"),
-            ("DontDestroyOnLoad","_GameManager/GlobalPool/Radiant Nail(Clone)"),
             ("GG_Radiance", "Boss Control/Absolute Radiance"),
         };
     }

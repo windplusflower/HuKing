@@ -30,7 +30,7 @@ internal partial class HuStateMachine : EntityStateMachine
         {
             GameObject nail = Instantiate(nailPrefab);
             nail.SetActive(false);
-            DontDestroyOnLoad(nail);
+            // DontDestroyOnLoad(nail);
 
             PlayMakerFSM fsm = nail.LocateMyFSM("Control");
             if (fsm != null)
@@ -66,51 +66,100 @@ internal partial class HuStateMachine : EntityStateMachine
     {
         while (true)
         {
-            for (int i = 0; i <= level; i++)
-                StartCoroutine(FireNailCoroutine(HeroController.instance.transform.position, new Rect(leftWall, downWall, rightWall - leftWall, upWall - downWall)));
+            for (int i = 0; i < 2; i++)
+            {
+                StartCoroutine(FireNail_RandomCircle(HeroController.instance.transform.position, GetBattleArea()));
+            }
+
+            if (level >= 2)
+            {
+                StartCoroutine(FireNail_Horizontal(HeroController.instance.transform.position, GetBattleArea()));
+            }
+
+            if (level >= 3)
+            {
+                StartCoroutine(FireNail_Vertical(HeroController.instance.transform.position, GetBattleArea()));
+            }
+
             yield return new WaitForSeconds(1.5f);
         }
     }
-    private IEnumerator FireNailCoroutine(Vector3 heroPos, Rect battleArea)
+
+    private Rect GetBattleArea() => new Rect(leftWall, downWall, rightWall - leftWall, upWall - downWall);
+    private IEnumerator FireNail_RandomCircle(Vector3 heroPos, Rect area)
+    {
+        Vector3 spawnPos = Vector3.zero;
+        bool found = false;
+        for (int i = 0; i < 30; i++)
+        {
+            float rx = UnityEngine.Random.Range(area.xMin, area.xMax);
+            float ry = UnityEngine.Random.Range(area.yMin, area.yMax);
+            Vector3 candidate = new Vector3(rx, ry, 0);
+            if (Vector3.Distance(candidate, heroPos) > 8f)
+            {
+                spawnPos = candidate;
+                found = true;
+                break;
+            }
+        }
+        if (!found) spawnPos = new Vector3(area.xMax, area.yMax, 0);
+        Vector3 targetPos = heroPos + (Vector3)(UnityEngine.Random.insideUnitCircle * 2.0f);
+        Vector2 moveDir = (targetPos - spawnPos).normalized;
+
+        yield return LaunchNail(spawnPos, moveDir, -90f);
+    }
+
+    private IEnumerator FireNail_Horizontal(Vector3 heroPos, Rect area)
+    {
+        float centerX = area.xMin + area.width / 2f;
+        float spawnX = heroPos.x < centerX ? area.xMax : area.xMin;
+        float spawnY = Mathf.Clamp(heroPos.y + UnityEngine.Random.Range(-1.5f, 1.5f), area.yMin, area.yMax);
+
+        Vector3 spawnPos = new Vector3(spawnX, spawnY, 0);
+        Vector2 moveDir = (heroPos.x < centerX) ? Vector2.left : Vector2.right;
+
+        yield return LaunchNail(spawnPos, moveDir, -90f);
+    }
+
+    private IEnumerator FireNail_Vertical(Vector3 heroPos, Rect area)
+    {
+        float centerY = area.yMin + area.height / 2f;
+        float spawnY = heroPos.y < centerY ? area.yMax : area.yMin;
+        float spawnX = Mathf.Clamp(heroPos.x + UnityEngine.Random.Range(-1.0f, 1.0f), area.xMin, area.xMax);
+
+        Vector3 spawnPos = new Vector3(spawnX, spawnY, 0);
+        Vector2 moveDir = (heroPos.y < centerY) ? Vector2.down : Vector2.up;
+
+        yield return LaunchNail(spawnPos, moveDir, -90f);
+    }
+    private IEnumerator LaunchNail(Vector3 spawnPos, Vector2 moveDirection, float lookAngleOffset = -90f)
     {
         if (nailPool.Count == 0) yield break;
         GameObject nail = nailPool.Dequeue();
         nailPool.Enqueue(nail);
 
         nail.SetActive(false);
-
         var rb = nail.GetComponent<Rigidbody2D>();
-        var col = nail.GetComponent<Collider2D>();
         var fsm = nail.LocateMyFSM("Control");
 
-        if (col != null) { col.enabled = true; col.isTrigger = true; }
-        if (rb != null) { rb.isKinematic = false; rb.velocity = Vector2.zero; }
-
-        Vector3 spawnPos = Vector3.zero;
-        bool found = false;
-        float radius = 16f;
-
-        for (int i = 0; i < 20; i++)
-        {
-            float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2);
-            Vector3 offset = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0) * radius;
-            Vector3 pos = heroPos + offset;
-            if (battleArea.Contains(pos))
-            {
-                spawnPos = pos;
-                found = true;
-                break;
-            }
-        }
-        if (!found) spawnPos = heroPos + Vector3.up * radius;
-
-        Vector2 errorOffset = UnityEngine.Random.insideUnitCircle * 2.0f;
-        Vector3 targetPosWithError = heroPos + (Vector3)errorOffset;
-        Vector2 direction = (targetPosWithError - spawnPos).normalized;
-        float lookAngle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-
         nail.transform.position = spawnPos;
-        nail.transform.eulerAngles = new Vector3(0, 0, lookAngle - 90f);
+
+        if (moveDirection == Vector2.right) nail.transform.eulerAngles = new Vector3(0, 0, 270f);
+        else if (moveDirection == Vector2.left) nail.transform.eulerAngles = new Vector3(0, 0, 90f);
+        else if (moveDirection == Vector2.up) nail.transform.eulerAngles = new Vector3(0, 0, 0f);
+        else if (moveDirection == Vector2.down) nail.transform.eulerAngles = new Vector3(0, 0, 180f);
+        else
+        {
+            float lookAngle = Mathf.Atan2(moveDirection.y, moveDirection.x) * Mathf.Rad2Deg;
+            nail.transform.eulerAngles = new Vector3(0, 0, lookAngle + lookAngleOffset);
+        }
+
+        var trail = nail.GetComponentInChildren<TrailRenderer>();
+        if (trail != null)
+        {
+            trail.Clear();
+            trail.emitting = false;
+        }
 
         if (fsm != null)
         {
@@ -118,19 +167,48 @@ internal partial class HuStateMachine : EntityStateMachine
             fsm.SendEvent("FORCE_START");
         }
 
-        nail.SetActive(true);
-        yield return new WaitForSeconds(0.8f);
+        GameObject line = new GameObject("AimLine");
+        line.transform.SetParent(nail.transform);
+        line.transform.localPosition = Vector3.zero;
+        line.transform.localRotation = Quaternion.identity;
 
-        if (rb != null) rb.velocity = direction * 35f;
+        var lr = line.AddComponent<LineRenderer>();
+        lr.material = new Material(Shader.Find("Sprites/Default"));
+        lr.startWidth = 0.15f;
+        lr.endWidth = 0.15f;
+        lr.positionCount = 2;
+        lr.useWorldSpace = true;
+        lr.SetPosition(0, spawnPos);
+        lr.SetPosition(1, spawnPos + (Vector3)moveDirection * 60f);
+
+        nail.SetActive(true);
+
+        float elapsed = 0f;
+        while (elapsed < 1.0f)
+        {
+            elapsed += Time.deltaTime;
+            if (lr != null)
+            {
+                float alpha = (Mathf.Sin(elapsed * 25f) + 1f) / 2f;
+                lr.startColor = new Color(1f, 0.1f, 0.1f, alpha * 0.8f);
+                lr.endColor = new Color(1f, 0f, 0f, 0f);
+            }
+            yield return null;
+        }
+
+        if (line != null) Destroy(line);
+
+        if (trail != null) trail.emitting = true;
+
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            rb.velocity = moveDirection * 50f;
+        }
 
         yield return new WaitForSeconds(2.0f);
 
-        if (fsm != null)
-        {
-            fsm.SendEvent("TO_RECYCLE");
-            yield return new WaitForSeconds(0.5f);
-        }
-
+        if (trail != null) trail.emitting = false;
         nail.SetActive(false);
     }
     private void InitializePlatFrame()
