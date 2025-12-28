@@ -94,8 +94,6 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod
                 {
                     if (self.FsmName == "Attacking")
                     {
-                        Log("First-time enable HuKing");
-
                         // 彻底关掉原版 FSM，不再让它们反复干扰
                         self.enabled = false;
 

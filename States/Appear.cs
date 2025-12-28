@@ -15,12 +15,7 @@ internal partial class HuStateMachine : EntityStateMachine
         yield return new CoroutineTransition { Routine = moveKnight() };
         if (skillTable.TryGetValue(SkillChoosen, out var skill))
         {
-            HuKing.instance.Log($"{SkillChoosen} skill Choosen");
             yield return new CoroutineTransition { Routine = skill.Appear() };
-        }
-        else
-        {
-            HuKing.instance.Log($"{SkillChoosen} skill not found");
         }
         bossAppear();
         flash.SetActive(true);

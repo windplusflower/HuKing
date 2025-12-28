@@ -29,7 +29,6 @@ internal partial class HuStateMachine : EntityStateMachine
     private Vector3 targetHuPosition;
 
     private float globalZoom = 0.82f;
-    private bool isBossActive = true;
 
     private int hitCount = 0;
     private float sawSize = 0.3f;
@@ -64,26 +63,6 @@ internal partial class HuStateMachine : EntityStateMachine
     {
         Modding.ReflectionHelper.SetField(HeroController.instance, "nailChargeTimer", 0f);
     }
-    protected override void EntityStateMachineUpdate()
-    {
-        base.EntityStateMachineUpdate();
-        if (entryFinish == false) return;
-        var camCtrl = GameCameras.instance.cameraController;
-        var tkCam = GameCameras.instance.tk2dCam;
-        var type = typeof(CameraController);
-        var fieldX = type.GetField("xLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
-        var fieldY = type.GetField("yLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
-        Vector3 startPos = camCtrl.transform.position;
-        Vector3 finalTargetPos = new Vector3(fixedCameraX, fixedCameraY, startPos.z);
-        if (camCtrl != null && tkCam != null)
-        {
-            camCtrl.mode = CameraController.CameraMode.LOCKED;
-            tkCam.ZoomFactor = globalZoom;
-            camCtrl.transform.position = finalTargetPos;
-            fieldX?.SetValue(camCtrl, finalTargetPos.x);
-            fieldY?.SetValue(camCtrl, finalTargetPos.y);
-        }
-    }
 
     protected override void EntityStateMachineStart()
     {
@@ -113,8 +92,30 @@ internal partial class HuStateMachine : EntityStateMachine
         rb.bodyType = RigidbodyType2D.Kinematic;
 
         StartCoroutine(PermanentCameraLock());
+        UnityEngine.SceneManagement.SceneManager.activeSceneChanged += OnSceneChanged;
     }
-    private bool entryFinish = false;
+    private void OnSceneChanged(UnityEngine.SceneManagement.Scene from, UnityEngine.SceneManagement.Scene to)
+    {
+        if (from.name == "GG_Ghost_Hu")
+        {
+            if (GameCameras.instance != null)
+            {
+                var camCtrl = GameCameras.instance.cameraController;
+                var tkCam = GameCameras.instance.tk2dCam;
+
+                if (camCtrl != null)
+                {
+                    camCtrl.mode = CameraController.CameraMode.LOCKED;
+                }
+
+                if (tkCam != null)
+                {
+                    // 场景转换时直接重置为 1.0f 最为稳妥
+                    tkCam.ZoomFactor = 1.0f;
+                }
+            }
+        }
+    }
     private IEnumerator PermanentCameraLock()
     {
         var camCtrl = GameCameras.instance.cameraController;
@@ -129,7 +130,7 @@ internal partial class HuStateMachine : EntityStateMachine
         Vector3 startPos = camCtrl.transform.position;
         Vector3 finalTargetPos = new Vector3(fixedCameraX, fixedCameraY, startPos.z);
 
-        // 阶段 1：平滑切入
+        camCtrl.mode = CameraController.CameraMode.FROZEN;
         while (elapsed < duration)
         {
             elapsed += Time.unscaledDeltaTime;
@@ -138,14 +139,12 @@ internal partial class HuStateMachine : EntityStateMachine
             float curX = Mathf.Lerp(startPos.x, finalTargetPos.x, t);
             float curY = Mathf.Lerp(startPos.y, finalTargetPos.y, t);
 
-            camCtrl.mode = CameraController.CameraMode.LOCKED;
             tkCam.ZoomFactor = curZoom;
             camCtrl.transform.position = new Vector3(curX, curY, startPos.z);
             fieldX?.SetValue(camCtrl, curX);
             fieldY?.SetValue(camCtrl, curY);
             yield return null;
         }
-        entryFinish = true;
     }
     private IEnumerator RestoreCameraZoomGlobal()
     {
@@ -153,10 +152,9 @@ internal partial class HuStateMachine : EntityStateMachine
         if (tkCam == null) yield break;
 
         float restoreElapsed = 0f;
-        float restoreDuration = 1.2f; // 恢复动画持续时间
+        float restoreDuration = 1.2f;
         float zoomAtDeath = tkCam.ZoomFactor;
 
-        // 如果当前缩放已经接近 1.0，则无需执行，直接修正
         if (Mathf.Abs(zoomAtDeath - 1.0f) < 0.01f)
         {
             tkCam.ZoomFactor = 1.0f;
@@ -165,24 +163,21 @@ internal partial class HuStateMachine : EntityStateMachine
 
         while (restoreElapsed < restoreDuration)
         {
-            // 使用 unscaledDeltaTime 确保在游戏顿帧或暂停时逻辑依然平滑
             restoreElapsed += Time.unscaledDeltaTime;
             float t = Mathf.SmoothStep(0, 1, restoreElapsed / restoreDuration);
 
             if (tkCam != null)
             {
-                // 平滑插值回到默认的 1.0 缩放
                 tkCam.ZoomFactor = Mathf.Lerp(zoomAtDeath, 1.0f, t);
             }
             yield return null;
         }
 
-        // 确保最终值精确为 1.0
         if (tkCam != null)
         {
             tkCam.ZoomFactor = 1.0f;
         }
-        entryFinish = false;
+        GameCameras.instance.cameraController.mode = CameraController.CameraMode.LOCKED;
     }
 
     private void SetupStompers()
