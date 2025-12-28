@@ -83,33 +83,39 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod
     [Obsolete]
     private void PlayMakerFSM_OnEnable(On.PlayMakerFSM.orig_OnEnable orig, PlayMakerFSM self)
     {
+        orig(self); // 先执行原逻辑
+
         if (mySettings.on)
         {
             if (self.gameObject.scene.name == "GG_Ghost_Hu" && self.gameObject.name == "Ghost Warrior Hu")
             {
-                if (self.FsmName == "Attacking")
+                // 关键：检查是否已经添加过我们的状态机，防止重复添加和协程冲突
+                if (self.gameObject.GetComponent<HuStateMachine>() == null)
                 {
-                    Log("enable HuKing");
-                    self.enabled = false;
-                    if (mySettings.lowPerformanceMode)
+                    if (self.FsmName == "Attacking")
                     {
-                        self.gameObject.AddComponent<HuStateMachine>().init(spikePrefab, sawPrefab, ringPrefab, beamPrefab, stomperPrefab, platPrefab, nailPrefab, 0.7f, mySettings.enableShining);
+                        Log("First-time enable HuKing");
+
+                        // 彻底关掉原版 FSM，不再让它们反复干扰
+                        self.enabled = false;
+
+                        float sSize = mySettings.lowPerformanceMode ? 0.7f : 0.3f;
+                        GameObject sPrefab = mySettings.lowPerformanceMode ? spikePrefab : sawPrefab;
+
+                        self.gameObject.AddComponent<HuStateMachine>().init(
+                            sPrefab, sawPrefab, ringPrefab, beamPrefab,
+                            stomperPrefab, platPrefab, nailPrefab, sSize, mySettings.enableShining);
                     }
-                    else
-                    {
-                        self.gameObject.AddComponent<HuStateMachine>().init(sawPrefab, sawPrefab, ringPrefab, beamPrefab, stomperPrefab, platPrefab, nailPrefab, 0.3f, mySettings.enableShining);
-                    }
-                }
-                if (self.FsmName == "Movement")
-                {
-                    self.enabled = false;
                 }
 
+                // 如果是已经禁用的 FSM 再次尝试启用，继续保持禁用
+                if (self.FsmName == "Attacking" || self.FsmName == "Movement")
+                {
+                    self.enabled = false;
+                }
             }
         }
-        orig(self);
     }
-
     /* 
      * ******** 配置文件读取和菜单设置，如没有额外需求不需要改动 ********
      */

@@ -6,11 +6,14 @@ using UnityEngine.PlayerLoop;
 
 namespace HuKing;
 
-internal partial class HuStateMachine : EntityStateMachine {
+internal partial class HuStateMachine : EntityStateMachine
+{
     [State]
-    private IEnumerator<Transition> Death() {
+    private IEnumerator<Transition> Death()
+    {
         HPManager.hp = 1;
-        foreach (var saw in saws) {
+        foreach (var saw in saws)
+        {
             saw.SetActive(false);
         }
         warpOut.SetActive(true);
@@ -20,6 +23,7 @@ internal partial class HuStateMachine : EntityStateMachine {
         warpIn.SetActive(true);
         flash.SetActive(true);
         transform.localScale = Vector3.one;
+        HeroController.instance.StartCoroutine(RestoreCameraZoomGlobal());
         yield return null;
     }
 }

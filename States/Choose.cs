@@ -9,10 +9,10 @@ namespace HuKing;
 internal partial class HuStateMachine : EntityStateMachine
 {
     private RandomSelector<string> selector = new([
-        // new(nameof(SawRoom),1,2,5),
-        // new(nameof(BoxRoom),1,2,5),
-        // new(nameof(SawNailRoom),1,2,5)
-        new(nameof(SawShotRoom),1,2,5),
+        // new(nameof(SawRoom),1,1,5),
+        // new(nameof(BoxRoom),1,1,5),
+        // new(nameof(SawNailRoom),1,1,5),
+        new(nameof(SawShotRoom),1,1,5),
     ]);
     [State]
     private IEnumerator<Transition> Choose()
