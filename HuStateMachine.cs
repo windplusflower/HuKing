@@ -11,7 +11,7 @@ internal partial class HuStateMachine : EntityStateMachine
 {
     private Config config = new();
     private tk2dSpriteAnimator animator = new();
-    private GameObject sawPrefab, ringPrefab, beam, stomperPrefab, platPrefab, nailPrefab;
+    private GameObject sawPrefab, realSawPrefab, ringPrefab, beam, stomperPrefab, platPrefab, nailPrefab;
     private GameObject warpIn, warpOut, flash;
     private bool enableShining = true;
     static private float leftWall = 32f, rightWall = 66f, downWall = 2.5f, upWall = 17f;
@@ -37,9 +37,10 @@ internal partial class HuStateMachine : EntityStateMachine
         spriteFacingLeft: true)
     {
     }
-    public void init(GameObject sawPrefab, GameObject ringPrefab, GameObject beamPrefab, GameObject stomperPrefab, GameObject platPrefab, GameObject nailPrefab, float sawsize, bool enableShining)
+    public void init(GameObject sawPrefab, GameObject realSawPrefab, GameObject ringPrefab, GameObject beamPrefab, GameObject stomperPrefab, GameObject platPrefab, GameObject nailPrefab, float sawsize, bool enableShining)
     {
         this.sawPrefab = sawPrefab;
+        this.realSawPrefab = realSawPrefab;
         this.ringPrefab = ringPrefab;
         this.beam = Instantiate(beamPrefab);
         this.stomperPrefab = stomperPrefab;

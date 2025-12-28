@@ -93,11 +93,11 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod
                     self.enabled = false;
                     if (mySettings.lowPerformanceMode)
                     {
-                        self.gameObject.AddComponent<HuStateMachine>().init(spikePrefab, ringPrefab, beamPrefab, stomperPrefab, platPrefab, nailPrefab, 0.7f, mySettings.enableShining);
+                        self.gameObject.AddComponent<HuStateMachine>().init(spikePrefab, sawPrefab, ringPrefab, beamPrefab, stomperPrefab, platPrefab, nailPrefab, 0.7f, mySettings.enableShining);
                     }
                     else
                     {
-                        self.gameObject.AddComponent<HuStateMachine>().init(sawPrefab, ringPrefab, beamPrefab, stomperPrefab, platPrefab, nailPrefab, 0.3f, mySettings.enableShining);
+                        self.gameObject.AddComponent<HuStateMachine>().init(sawPrefab, sawPrefab, ringPrefab, beamPrefab, stomperPrefab, platPrefab, nailPrefab, 0.3f, mySettings.enableShining);
                     }
                 }
                 if (self.FsmName == "Movement")
