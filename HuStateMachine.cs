@@ -87,12 +87,17 @@ internal partial class HuStateMachine : EntityStateMachine
             HPManager.hp = 601;
         }
         originalHp = HPManager.hp;
-        registerSawRoom();
-        registerBoxRoom();
-        registerSawNailRoom();
+        registerSkills();
         var rb = GetComponent<Rigidbody2D>();
         rb.bodyType = RigidbodyType2D.Kinematic;
         //HuKing.instance.Log("HuStateMachine Initialized");
+    }
+    private void registerSkills()
+    {
+        registerSawRoom();
+        registerBoxRoom();
+        registerSawNailRoom();
+        registerSawShotRoom();
     }
 
     private GameObject Target()

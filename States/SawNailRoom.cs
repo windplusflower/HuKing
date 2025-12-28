@@ -31,7 +31,6 @@ internal partial class HuStateMachine : EntityStateMachine
         {
             GameObject nail = Instantiate(nailPrefab);
             nail.SetActive(false);
-            // DontDestroyOnLoad(nail);
 
             PlayMakerFSM fsm = nail.LocateMyFSM("Control");
             if (fsm != null)
@@ -382,22 +381,17 @@ internal partial class HuStateMachine : EntityStateMachine
         return orig(self);
     }
 
-    // 核心修复：强制在地面时允许执行下劈逻辑
     private void OnHeroAttack(On.HeroController.orig_Attack orig, HeroController self, GlobalEnums.AttackDirection attackDir)
     {
-        // 检查是否在技能期间，且玩家是否按住了“下”键
         if (IsSawNailSkillActive() && GameManager.instance.inputHandler.inputActions.down.IsPressed)
         {
-            // 强制将攻击方向改为下劈
             attackDir = GlobalEnums.AttackDirection.downward;
-
-            // 源码显示 cState 是 public，直接修改
             bool wasOnGround = self.cState.onGround;
             if (wasOnGround)
             {
-                self.cState.onGround = false; // 临时改为不在地面以通过 Attack 内部的潜在拦截
+                self.cState.onGround = false;
                 orig(self, attackDir);
-                self.cState.onGround = wasOnGround; // 立即还原
+                self.cState.onGround = wasOnGround;
                 return;
             }
         }
