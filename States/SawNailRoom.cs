@@ -1,4 +1,5 @@
 using System.Collections;
+using Modding.Utils;
 using RingLib.StateMachine;
 using Satchel;
 using UnityEngine;
@@ -12,6 +13,10 @@ internal partial class HuStateMachine : EntityStateMachine
     private Queue<GameObject> nailPool = new Queue<GameObject>();
     private const int POOL_SIZE = 15;
     private List<UnityEngine.Coroutine> activeNailRoutines = new List<UnityEngine.Coroutine>();
+    public class PlatFrameData : MonoBehaviour
+    {
+        public float Size;
+    }
     [State]
     private IEnumerator<Transition> SawNailRoom()
     {
@@ -260,6 +265,10 @@ internal partial class HuStateMachine : EntityStateMachine
     }
     private void CreatePlatSquare(float size, GameObject parent)
     {
+        // 添加数据组件并记录尺寸
+        var data = parent.GetOrAddComponent<PlatFrameData>();
+        data.Size = size;
+
         var rb = parent.AddComponent<Rigidbody2D>();
         rb.bodyType = RigidbodyType2D.Kinematic;
         rb.simulated = true;
@@ -273,7 +282,6 @@ internal partial class HuStateMachine : EntityStateMachine
 
         float offset = size / 2f;
         float thickness = 0.95f;
-
         Vector3 baseScale = new Vector3(size * 0.25f, thickness, 1);
 
         CreatePlatformEdge(parent, new Vector3(0, -offset, 0), baseScale, 0f);
@@ -303,47 +311,51 @@ internal partial class HuStateMachine : EntityStateMachine
 
     private IEnumerator MoveFrame(Vector2 direction, GameObject targetFrame)
     {
-        if (isMoving) yield break;
+        if (isMoving || targetFrame == null) yield break;
         isMoving = true;
+
+        // 1. 从对象本身获取尺寸，而非依赖外部的 level 变量
+        float currentSize = 8f; // 默认值
+        var data = targetFrame.GetComponent<PlatFrameData>();
+        if (data != null)
+        {
+            currentSize = data.Size;
+        }
 
         Rigidbody2D rb = targetFrame.GetComponent<Rigidbody2D>();
         Vector3 startPos = targetFrame.transform.position;
 
-        float currentSize = 8f;
-        if (level == 2) currentSize = 6f;
-        if (level == 3) currentSize = 4f;
-
         float maxMoveDist = 2f;
-        Vector2 boxSize = new Vector2(currentSize * 0.9f, currentSize * 0.9f); // 稍微缩一点，避免摩擦侧墙
+        // 使用动态获取的尺寸来计算 BoxCast 大小
+        Vector2 boxSize = new Vector2(currentSize * 0.9f, currentSize * 0.9f);
 
+        // 2. 物理探测
         RaycastHit2D hit = Physics2D.BoxCast(startPos, boxSize, 0f, direction, maxMoveDist, 1 << 8);
 
         float finalMoveDist = maxMoveDist;
-
         if (hit.collider != null)
         {
             finalMoveDist = Mathf.Max(0, hit.distance - 0.05f);
         }
+
+        // 3. 边界约束（可选：如果 UpWall 等是全局的话）
         if (direction.y > 0.1f)
         {
             float remainingDist = upWall - startPos.y;
             finalMoveDist = Mathf.Min(finalMoveDist, Mathf.Max(0, remainingDist));
         }
+
         Vector3 targetPos = startPos + (Vector3)direction * finalMoveDist;
 
+        // 4. 平滑移动
         float elapsed = 0f;
         float duration = 0.1f;
-
         while (elapsed < duration)
         {
             if (targetFrame == null) yield break;
             elapsed += Time.deltaTime;
-
             float t = elapsed / duration;
-            float easedT = Mathf.SmoothStep(0, 1, t);
-            Vector3 nextPos = Vector3.Lerp(startPos, targetPos, easedT);
-            rb.MovePosition(nextPos);
-
+            rb.MovePosition(Vector3.Lerp(startPos, targetPos, Mathf.SmoothStep(0, 1, t)));
             yield return null;
         }
 

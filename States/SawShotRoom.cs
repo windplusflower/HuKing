@@ -41,6 +41,7 @@ internal partial class HuStateMachine : EntityStateMachine
             }
         }
 
+        On.HeroController.Attack -= OnSawShotHeroAttack;
         On.HeroController.Attack += OnSawShotHeroAttack;
     }
 
@@ -50,9 +51,13 @@ internal partial class HuStateMachine : EntityStateMachine
         shotPlatFrame[level - 1].transform.position = heroPos;
         shotPlatFrame[level - 1].SetActive(true);
 
+        if (GameCameras.instance.tk2dCam != null)
+            originalZoom = GameCameras.instance.tk2dCam.ZoomFactor;
+
         SpawnColumns();
         yield return null;
     }
+
     private IEnumerator Loop_SawShotRoom()
     {
         while (true)
@@ -70,23 +75,22 @@ internal partial class HuStateMachine : EntityStateMachine
 
                 if (camCtrl != null && cam != null)
                 {
-                    cam.ZoomFactor = 0.8f;
-
+                    cam.ZoomFactor = 0.82f;
                     float visionFocusX = centerX + 15f;
-                    float visionFocusY = hp.y + 5f;
+                    float visionFocusY = hp.y + 4.5f;
+
                     camCtrl.transform.position = new Vector3(visionFocusX, visionFocusY, camCtrl.transform.position.z);
                     camCtrl.mode = CameraController.CameraMode.LOCKED;
-                    var type = typeof(CameraController);
-                    var xLockField = type.GetField("xLockPos", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-                    if (xLockField != null) xLockField.SetValue(camCtrl, visionFocusX);
 
-                    var yLockField = type.GetField("yLockPos", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-                    if (yLockField != null) yLockField.SetValue(camCtrl, visionFocusY);
+                    var type = typeof(CameraController);
+                    type.GetField("xLockPos", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.SetValue(camCtrl, visionFocusX);
+                    type.GetField("yLockPos", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.SetValue(camCtrl, visionFocusY);
                 }
             }
             yield return null;
         }
     }
+
     private IEnumerator<Transition> Disappear_SawShotRoom()
     {
         var cam = GameCameras.instance.tk2dCam;
@@ -97,15 +101,18 @@ internal partial class HuStateMachine : EntityStateMachine
         foreach (var col in activeColumns) if (col != null) Destroy(col);
         activeColumns.Clear();
 
-        shotPlatFrame[level - 1].SetActive(false);
+        if (level > 0 && shotPlatFrame[level - 1] != null)
+            shotPlatFrame[level - 1].SetActive(false);
+
         yield return new ToState { State = "Idle" };
     }
 
     private IEnumerator LaunchBouncingSaw(Vector3 startPos, Vector2 direction)
     {
-        Vector3 spawnPos = startPos + (Vector3)direction * 2.2f + Vector3.up * 0.5f;
+        Vector3 spawnPos = startPos + (Vector3)direction * 2.2f + Vector3.up * 0.1f;
         GameObject saw = Instantiate(sawPrefab, spawnPos, Quaternion.identity);
-        saw.transform.localScale = Vector3.one * 0.45f;
+
+        saw.transform.localScale = Vector3.one * 0.22f;
         saw.SetActive(true);
 
         var hazard = saw.GetComponent<DamageHero>();
@@ -117,38 +124,41 @@ internal partial class HuStateMachine : EntityStateMachine
         Vector2 currentDir = direction;
         float aliveTime = 0f;
 
-        while (bounceCount <= 8 && aliveTime < 7f)
+        while (bounceCount <= 12 && aliveTime < 7f)
         {
             aliveTime += Time.deltaTime;
             saw.transform.position += (Vector3)currentDir * 35f * Time.deltaTime;
             saw.transform.Rotate(0, 0, 1200 * Time.deltaTime);
 
-            if (aliveTime > 0.2f)
+            if (aliveTime > 0.3f)
             {
-                RaycastHit2D heroHit = Physics2D.Raycast(saw.transform.position, currentDir, 0.7f, 1 << 9);
-                if (heroHit.collider != null)
+                Collider2D heroCol = Physics2D.OverlapCircle(saw.transform.position, 0.4f, 1 << 9);
+                if (heroCol != null)
                 {
-                    HeroController.instance.TakeDamage(heroHit.collider.gameObject, GlobalEnums.CollisionSide.other, 1, 0);
+                    HeroController.instance.TakeDamage(heroCol.gameObject, GlobalEnums.CollisionSide.other, 1, 0);
                     break;
                 }
-            }
-            RaycastHit2D envHit = Physics2D.Raycast(saw.transform.position, currentDir, 0.7f, 1 << 8 | 1 << 11);
-            if (envHit.collider != null)
-            {
-                GameObject target = envHit.collider.gameObject;
-                if (target.layer == 11)
-                {
-                    target.SendMessage("TakeDamage", 13, SendMessageOptions.DontRequireReceiver);
-                    break;
-                }
-                else if (target.layer == 8)
-                {
-                    if (target.transform.IsChildOf(shotPlatFrame[level - 1].transform)) { yield return null; continue; }
 
-                    currentDir = Vector2.Reflect(currentDir, envHit.normal);
-                    bounceCount++;
+                RaycastHit2D envHit = Physics2D.Raycast(saw.transform.position, currentDir, 0.5f, (1 << 8) | (1 << 11));
+                if (envHit.collider != null)
+                {
+                    GameObject target = envHit.collider.gameObject;
 
-                    saw.transform.position += (Vector3)currentDir * 0.2f;
+                    if (target.layer == 11)
+                    {
+                        target.SendMessage("TakeDamage", 13, SendMessageOptions.DontRequireReceiver);
+                        break;
+                    }
+                    else if (target.layer == 8)
+                    {
+                        bool isFrame = target.name.Contains("ShotFrame") || target.name.Contains("gg_plat_float_wide");
+                        if (!isFrame)
+                        {
+                            currentDir = Vector2.Reflect(currentDir, envHit.normal);
+                            bounceCount++;
+                            saw.transform.position += (Vector3)currentDir * 0.3f;
+                        }
+                    }
                 }
             }
             yield return null;
@@ -167,12 +177,12 @@ internal partial class HuStateMachine : EntityStateMachine
         for (int i = 0; i < count; i++)
         {
             GameObject group = new GameObject($"SawCol_{i}");
-            // 再次增加偏移，让第一根柱子离英雄更远，方便观察
             group.transform.position = new Vector3(hp.x + 15f + (i * 9f), hp.y, 0);
 
             float gapY = UnityEngine.Random.Range(-3.5f, 3.5f);
             float gapSize = 2.8f;
 
+            // 这里生成的柱子使用的是 platPrefab，确保它们的 Layer 为 8
             CreateColumnPart(group.transform, new Vector3(0, gapY + gapSize + 7.5f, 0));
             CreateColumnPart(group.transform, new Vector3(0, gapY - gapSize - 7.5f, 0));
 
@@ -188,6 +198,7 @@ internal partial class HuStateMachine : EntityStateMachine
         part.transform.localRotation = Quaternion.Euler(0, 0, 90f);
         part.transform.localScale = new Vector3(15f, 1.3f, 1f);
         part.layer = 8;
+        part.name = "SawColumn_Part"; // 明确命名，方便调试
         part.SetActive(true);
     }
 
@@ -205,20 +216,19 @@ internal partial class HuStateMachine : EntityStateMachine
 
     private void OnSawShotHeroAttack(On.HeroController.orig_Attack orig, HeroController self, GlobalEnums.AttackDirection attackDir)
     {
-        if (IsSawShotActive() && GameManager.instance.inputHandler.inputActions.down.IsPressed)
+        if (IsSawShotActive())
         {
-            attackDir = GlobalEnums.AttackDirection.downward;
-            bool wasOnGround = self.cState.onGround;
-            if (wasOnGround)
+            if (GameManager.instance.inputHandler.inputActions.down.IsPressed)
             {
-                self.cState.onGround = false;
-                orig(self, attackDir);
-                self.cState.onGround = wasOnGround;
-                return;
+                attackDir = GlobalEnums.AttackDirection.downward;
+                if (self.cState.onGround)
+                {
+                    self.cState.onGround = false;
+                    orig(self, attackDir);
+                    self.cState.onGround = true;
+                    return;
+                }
             }
-        }
-        else if (IsSawShotActive())
-        {
             HandleSawShotRoomActions(self, attackDir);
         }
         orig(self, attackDir);
@@ -228,7 +238,7 @@ internal partial class HuStateMachine : EntityStateMachine
     {
         if (dir == GlobalEnums.AttackDirection.normal && self.cState.facingRight)
         {
-            if (Time.time > lastSawShotTime + 0.1f)
+            if (Time.time > lastSawShotTime + 0.12f)
             {
                 lastSawShotTime = Time.time;
                 activeShotRoutines.Add(StartCoroutine(LaunchBouncingSaw(self.transform.position, Vector2.right)));
@@ -236,5 +246,5 @@ internal partial class HuStateMachine : EntityStateMachine
         }
     }
 
-    private bool IsSawShotActive() => shotPlatFrame[level - 1] != null && shotPlatFrame[level - 1].activeInHierarchy;
+    private bool IsSawShotActive() => level > 0 && shotPlatFrame[level - 1] != null && shotPlatFrame[level - 1].activeInHierarchy;
 }
