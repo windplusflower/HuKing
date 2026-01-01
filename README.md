@@ -1,6 +1,6 @@
 # Hu King - 胡王 Mod
 
-[**English Version**](README_en.md) | **中文说明**
+[**English Version**](README-en.md) | **中文说明**
 
 ![胡长老](HuKing.png)
 
