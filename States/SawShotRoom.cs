@@ -157,7 +157,7 @@ internal partial class HuStateMachine : EntityStateMachine
         foreach (var o in activeObstacles) if (o != null) Destroy(o);
         activeObstacles.Clear();
 
-        CreateBoundaryWall(new Vector3((leftWall + rightWall) / 2f, upWall, 0), rightWall - leftWall, true);
+        CreateBoundaryWall(new Vector3((leftWall + rightWall) / 2f, upWall + 2.5f, 0), rightWall - leftWall, true);
 
         float shieldX = leftWall + (rightWall - leftWall) * 0.7f;
         float shieldY = (upWall + downWall) / 2f + 0.5f;

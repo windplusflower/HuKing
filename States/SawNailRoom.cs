@@ -189,7 +189,16 @@ internal partial class HuStateMachine : EntityStateMachine
         GameObject nail = nailPool.Dequeue();
         nailPool.Enqueue(nail);
         nail.SetActive(false);
+        var damageHero = nail.GetComponent<DamageHero>();
+        if (damageHero == null)
+        {
+            damageHero = nail.GetComponentInChildren<DamageHero>();
+        }
 
+        if (damageHero != null)
+        {
+            damageHero.damageDealt = 1;
+        }
         var rb = nail.GetComponent<Rigidbody2D>();
         var ha = (HeroController.instance != null) ? HeroController.instance.GetComponent<HeroAudioController>() : null;
 
