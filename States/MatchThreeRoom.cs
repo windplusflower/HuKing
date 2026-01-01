@@ -66,7 +66,7 @@ internal partial class HuStateMachine : EntityStateMachine
 
     private GameObject DequeueMatchSawWithBalance(Vector3 pos, float scale)
     {
-        GameObject saw = blankSaws.Count > 0 ? blankSaws.Dequeue() : Instantiate(realSawPrefab);
+        GameObject saw = wallSaws.Count > 0 ? wallSaws.Dequeue() : Instantiate(realSawPrefab);
         saw.transform.position = pos;
         saw.transform.localScale = Vector3.one * scale;
 
@@ -296,14 +296,69 @@ internal partial class HuStateMachine : EntityStateMachine
         List<GameObject> matches = new List<GameObject>();
         HashSet<GameObject> visited = new HashSet<GameObject>();
 
+        // 执行递归搜索
         RecursiveSearch(source, targetColor, matches, visited);
 
         if (matches.Count >= 3)
         {
+            // 成功三消
             foreach (var m in matches) RecycleMatchSaw(m, true);
         }
+        else if (matches.Count == 1)
+        {
+            // 惩罚逻辑：matches.Count == 1 表示只有它自己，没有任何同色邻居
+            StartCoroutine(PunishRingSaws(source.transform.position));
+        }
+    }
+    private IEnumerator PunishRingSaws(Vector3 centerPos)
+    {
+        int sawCount = 8; // 射出8个方向的电锯
+        float shootSpeed = 15f;
+
+        // 播放一个提示音效（如果有的话）
+        // HeroController.instance.GetComponent<AudioSource>().PlayOneShot(yourAudioClip);
+
+        for (int i = 0; i < sawCount; i++)
+        {
+            float angle = i * (360f / sawCount);
+            Vector2 direction = new Vector2(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad));
+
+            // 从对象池取出一个电锯作为惩罚弹幕
+            GameObject punishSaw = wallSaws.Count > 0 ? wallSaws.Dequeue() : Instantiate(realSawPrefab);
+            punishSaw.transform.position = centerPos;
+            punishSaw.transform.localScale = Vector3.one * 0.4f; // 惩罚弹幕通常小一点
+            punishSaw.SetActive(true);
+
+            // 颜色设为醒目的警告色，比如纯白或深红
+            var sr = punishSaw.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.color = Color.white;
+
+            // 给它一个临时的移动逻辑（如果不单独写类，可以直接用简单的脚本或协程）
+            StartCoroutine(MovePunishSaw(punishSaw, direction, shootSpeed));
+        }
+        yield break;
     }
 
+    private IEnumerator MovePunishSaw(GameObject saw, Vector2 dir, float speed)
+    {
+        float timer = 0f;
+        while (timer < 3f) // 3秒后自动回收，防止飞出场外不消失
+        {
+            saw.transform.position += (Vector3)dir * speed * Time.deltaTime;
+            timer += Time.deltaTime;
+
+            // 简单的碰撞检测（可选）：如果撞到小骑士
+            // if (Vector2.Distance(saw.transform.position, HeroController.instance.transform.position) < 1f) { ... }
+
+            yield return null;
+        }
+
+        // 回收
+        var sr = saw.GetComponent<SpriteRenderer>();
+        if (sr != null) sr.color = Color.white;
+        saw.SetActive(false);
+        wallSaws.Enqueue(saw);
+    }
     private void RecursiveSearch(GameObject current, Color color, List<GameObject> matches, HashSet<GameObject> visited)
     {
         if (current == null || visited.Contains(current)) return;
@@ -333,7 +388,7 @@ internal partial class HuStateMachine : EntityStateMachine
 
     private GameObject DequeueMatchSaw(Vector3 pos, float scale)
     {
-        GameObject saw = blankSaws.Count > 0 ? blankSaws.Dequeue() : Instantiate(realSawPrefab);
+        GameObject saw = wallSaws.Count > 0 ? wallSaws.Dequeue() : Instantiate(realSawPrefab);
         saw.transform.position = pos;
         saw.transform.localScale = Vector3.one * scale;
 
@@ -370,7 +425,7 @@ internal partial class HuStateMachine : EntityStateMachine
         saw.transform.localScale = Vector3.one;
 
         saw.SetActive(false);
-        blankSaws.Enqueue(saw);
+        wallSaws.Enqueue(saw);
     }
 
     private IEnumerator AnimateSnap(GameObject obj, Vector3 targetPos)
@@ -406,7 +461,7 @@ internal partial class HuStateMachine : EntityStateMachine
             saw.transform.localScale = Vector3.one;
 
             saw.SetActive(false);
-            blankSaws.Enqueue(saw);
+            wallSaws.Enqueue(saw);
         }
     }
 

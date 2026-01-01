@@ -24,6 +24,7 @@ internal partial class HuStateMachine : EntityStateMachine
 
     private Queue<GameObject> saws = new();
     private Queue<GameObject> blankSaws = new();
+    private Queue<GameObject> wallSaws = new();
     private Queue<GameObject> stompers = new();
     private HealthManager HPManager;
     private int originalHp;
@@ -81,6 +82,10 @@ internal partial class HuStateMachine : EntityStateMachine
         for (int i = 0; i < 150; i++)
         {
             blankSaws.Enqueue(Instantiate(sawPrefab));
+        }
+        for (int i = 0; i < 150; i++)
+        {
+            wallSaws.Enqueue(Instantiate(realSawPrefab));
         }
 
         SetupStompers();
