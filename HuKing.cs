@@ -36,7 +36,7 @@ public class HuKing : Mod, IGlobalSettings<Settings>, IMenuMod
     {
         instance = this;
     }
-    public override string GetVersion() => "1.0";
+    public override string GetVersion() => "2.0";
 
     /* 
      * ******** 预加载和hook ********
