@@ -18,10 +18,6 @@ internal partial class HuStateMachine : EntityStateMachine
         {
             yield return new CoroutineTransition { Routine = skill.Disappear() };
         }
-        else
-        {
-            HuKing.instance.Log($"{SkillChoosen} skill not found");
-        }
         foreach (var coroutine in mCoroutines)
         {
             StopCoroutine(coroutine);

@@ -32,7 +32,7 @@ internal partial class HuStateMachine : EntityStateMachine
     private Vector3 targetHuPosition;
 
     private float globalZoom = 0.82f;
-    private bool isCameraLocked = false; // 全局相机锁定开关
+    private bool isCameraLocked = false;
 
     private int hitCount = 0;
     private float sawSize = 0.3f;
@@ -40,7 +40,6 @@ internal partial class HuStateMachine : EntityStateMachine
     private int level = 1;
     private Dictionary<string, SkillPhases> skillTable = new Dictionary<string, SkillPhases>();
 
-    // 缓存反射字段以提高性能
     private static readonly FieldInfo xLockField = typeof(CameraController).GetField("xLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
     private static readonly FieldInfo yLockField = typeof(CameraController).GetField("yLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
 
@@ -69,7 +68,6 @@ internal partial class HuStateMachine : EntityStateMachine
 
     protected override void EntityStateMachineFixedUpdate()
     {
-        // 禁用蓄力
         Modding.ReflectionHelper.SetField(HeroController.instance, "nailChargeTimer", 0f);
     }
 
@@ -100,17 +98,14 @@ internal partial class HuStateMachine : EntityStateMachine
         var rb = GetComponent<Rigidbody2D>();
         rb.bodyType = RigidbodyType2D.Kinematic;
 
-        // 注册核心相机钩子
         On.CameraController.LateUpdate += CameraLateUpdateHook;
 
-        // 开始渐变锁定
         StartCoroutine(PermanentCameraLock());
         UnityEngine.SceneManagement.SceneManager.activeSceneChanged += OnSceneChanged;
     }
 
     private void OnSceneChanged(UnityEngine.SceneManagement.Scene from, UnityEngine.SceneManagement.Scene to)
     {
-        // 卸载钩子，防止影响其他场景
         On.CameraController.LateUpdate -= CameraLateUpdateHook;
 
         if (from.name == "GG_Ghost_Hu")
@@ -125,45 +120,36 @@ internal partial class HuStateMachine : EntityStateMachine
         }
     }
 
-    // 核心：彻底解决抖动和 Y 轴漂移的钩子
     private void CameraLateUpdateHook(On.CameraController.orig_LateUpdate orig, CameraController self)
     {
-        orig(self); // 先让原逻辑跑完（包括起跳、复活等计算）
+        orig(self);
 
         if (isCameraLocked)
         {
-            // 在原逻辑运行后的同一帧，强制覆盖所有结果
             self.mode = CameraController.CameraMode.FROZEN;
 
-            // 锁定位置
             Vector3 targetPos = new Vector3(fixedCameraX, fixedCameraY, self.transform.position.z);
             self.transform.position = targetPos;
 
-            // 锁定私有坐标字段，确保相机内部状态同步
             xLockField?.SetValue(self, fixedCameraX);
             yLockField?.SetValue(self, fixedCameraY);
 
-            // 锁定缩放
             if (GameCameras.instance.tk2dCam != null)
             {
                 GameCameras.instance.tk2dCam.ZoomFactor = globalZoom;
             }
         }
     }
-    // 将此方法放回 HuStateMachine 类中以修复编译错误
     private IEnumerator RestoreCameraZoomGlobal()
     {
         var tkCam = GameCameras.instance?.tk2dCam;
         if (tkCam == null) yield break;
 
-        // 关键：开始恢复缩放前，必须关闭强行锁定开关
         isCameraLocked = false;
 
         float restoreElapsed = 0f;
         float restoreDuration = 1.2f;
         float zoomAtDeath = tkCam.ZoomFactor;
-
-        // 如果缩放已经很接近 1.0，直接重置
         if (Mathf.Abs(zoomAtDeath - 1.0f) < 0.01f)
         {
             tkCam.ZoomFactor = 1.0f;
@@ -187,7 +173,6 @@ internal partial class HuStateMachine : EntityStateMachine
             tkCam.ZoomFactor = 1.0f;
         }
 
-        // 恢复完成后将模式设回 LOCKED 或 FOLLOWING
         if (GameCameras.instance != null && GameCameras.instance.cameraController != null)
         {
             GameCameras.instance.cameraController.mode = CameraController.CameraMode.LOCKED;
@@ -195,7 +180,7 @@ internal partial class HuStateMachine : EntityStateMachine
     }
     private IEnumerator PermanentCameraLock()
     {
-        isCameraLocked = false; // 过渡期间先由协程控制
+        isCameraLocked = false;
         var camCtrl = GameCameras.instance.cameraController;
         var tkCam = GameCameras.instance.tk2dCam;
 
@@ -225,12 +210,8 @@ internal partial class HuStateMachine : EntityStateMachine
             yield return null;
         }
 
-        // 过渡完成，开启 LateUpdate 的强行锁定开关
         isCameraLocked = true;
     }
-
-    // 原有的逻辑已失效，现在由 Hook 托管，将其清空或移除
-    private void ForceCameraToFixedState() { }
 
     private void SetupStompers()
     {

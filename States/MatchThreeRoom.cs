@@ -12,13 +12,17 @@ namespace HuKing;
 internal partial class HuStateMachine : EntityStateMachine
 {
     private List<GameObject> activeMatchSaws = new List<GameObject>();
-    private Color[] matchColors = { Color.red, Color.yellow, Color.blue };
+    private Color[] matchColors = {
+    new Color(1f, 0.3f, 0.3f), // 亮红
+    new Color(1f, 1f, 0.3f),   // 亮黄
+    new Color(0.3f, 0.6f, 1f)  // 亮蓝
+};
 
     private float currentScale;
     private float currentRadius;
     private float stepX;
     private float stepY;
-    private float wallLeftEdgeX; // 用于动态避开下落电锯
+    private float wallLeftEdgeX;
 
     [State]
     private IEnumerator<Transition> MatchThreeRoom()
@@ -34,7 +38,6 @@ internal partial class HuStateMachine : EntityStateMachine
         int initialCols = level switch { 1 => 4, 2 => 5, 3 => 8, _ => 4 };
         float wallStartX = HuStateMachine.rightWall - 5f;
 
-        // 计算墙的最左侧边缘，并多留出 2 个单位的缓冲距离
         wallLeftEdgeX = wallStartX - ((initialCols - 1) * stepX);
 
         for (int c = 0; c < initialCols; c++)
@@ -159,12 +162,10 @@ internal partial class HuStateMachine : EntityStateMachine
     }
     private void SpawnFallingSaw()
     {
-        float maxSpawnX = wallLeftEdgeX - (currentRadius * 2f); // 避开电锯墙边界
+        float maxSpawnX = wallLeftEdgeX - (currentRadius * 2f);
         float minSpawnX = HuStateMachine.leftWall + 2f;
         float spawnX;
 
-        // 动态安全距离：基于当前电锯半径
-        // 3.5倍半径通常能确保小骑士头顶有足够的视觉空间和位移余量
         float dynamicSafeDistance = currentRadius * 3.5f;
         float spawnSafeX = targetKnightPosition.x;
 
@@ -173,7 +174,6 @@ internal partial class HuStateMachine : EntityStateMachine
         {
             spawnX = UnityEngine.Random.Range(minSpawnX, maxSpawnX);
 
-            // 使用动态计算的安全距离
             if (Mathf.Abs(spawnX - spawnSafeX) > dynamicSafeDistance)
             {
                 break;
@@ -182,7 +182,6 @@ internal partial class HuStateMachine : EntityStateMachine
             attempts++;
             if (attempts > 10)
             {
-                // 兜底：选择距离复活点最远的一侧
                 spawnX = (spawnSafeX - minSpawnX > maxSpawnX - spawnSafeX) ? minSpawnX : maxSpawnX;
                 break;
             }
@@ -283,15 +282,12 @@ internal partial class HuStateMachine : EntityStateMachine
             }
         }
 
-        incoming.transform.position = bestPos;
+        StartCoroutine(AnimateSnap(incoming, bestPos));
 
-        // 更新墙的最左边缘坐标，以便后续下落电锯避开
         if (incoming.transform.position.x < wallLeftEdgeX)
         {
             wallLeftEdgeX = incoming.transform.position.x;
         }
-
-        HandleMatchDynamic(incoming);
     }
 
     private void HandleMatchDynamic(GameObject source)
@@ -304,7 +300,7 @@ internal partial class HuStateMachine : EntityStateMachine
 
         if (matches.Count >= 3)
         {
-            foreach (var m in matches) RecycleMatchSaw(m);
+            foreach (var m in matches) RecycleMatchSaw(m, true);
         }
     }
 
@@ -348,21 +344,74 @@ internal partial class HuStateMachine : EntityStateMachine
         saw.SetActive(true);
         return saw;
     }
-
-    private void RecycleMatchSaw(GameObject saw)
+    // 特效 1：三消消除时的“变大、变白、消失”
+    private IEnumerator AnimateMatchElimination(GameObject saw)
     {
-        activeMatchSaws.Remove(saw);
+        float duration = 0.2f;
+        float elapsed = 0;
+        Vector3 startScale = saw.transform.localScale;
+        SpriteRenderer sr = saw.GetComponent<SpriteRenderer>();
+        Color originalColor = (sr != null) ? sr.color : Color.white;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+
+            saw.transform.localScale = Vector3.Lerp(startScale, startScale * 1.5f, t);
+            if (sr != null) sr.color = Color.Lerp(originalColor, Color.white, t);
+
+            yield return null;
+        }
+
         var behavior = saw.GetComponent<FallingSawBehavior>();
         if (behavior != null) behavior.enabled = false;
+        if (sr != null) sr.color = Color.white;
+        saw.transform.localScale = Vector3.one;
+
         saw.SetActive(false);
         blankSaws.Enqueue(saw);
     }
 
+    private IEnumerator AnimateSnap(GameObject obj, Vector3 targetPos)
+    {
+        float duration = 0.08f;
+        float elapsed = 0;
+        Vector3 startPos = obj.transform.position;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            obj.transform.position = Vector3.Lerp(startPos, targetPos, elapsed / duration);
+            yield return null;
+        }
+        obj.transform.position = targetPos;
+        HandleMatchDynamic(obj);
+    }
+    private void RecycleMatchSaw(GameObject saw, bool playEffect = false)
+    {
+        activeMatchSaws.Remove(saw);
+
+        if (playEffect && saw.activeInHierarchy)
+        {
+            StartCoroutine(AnimateMatchElimination(saw));
+        }
+        else
+        {
+            var behavior = saw.GetComponent<FallingSawBehavior>();
+            if (behavior != null) behavior.enabled = false;
+
+            var sr = saw.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.color = Color.white;
+            saw.transform.localScale = Vector3.one;
+
+            saw.SetActive(false);
+            blankSaws.Enqueue(saw);
+        }
+    }
+
     private IEnumerator<Transition> Appear_MatchThree()
     {
-        // 移动小骑士到指定起始位置
-        HeroController.instance.transform.position = targetKnightPosition;
-
         foreach (var saw in activeMatchSaws)
         {
             saw.SetActive(true);

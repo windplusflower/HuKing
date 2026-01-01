@@ -14,7 +14,6 @@ internal partial class HuStateMachine : EntityStateMachine
     [State]
     private IEnumerator<Transition> SawRoom()
     {
-        //HuKing.instance.Log("Entering SawRoom state");
         generateSaw();
         yield return new ToState { State = nameof(Appear) };
     }
@@ -196,7 +195,6 @@ internal partial class HuStateMachine : EntityStateMachine
                 yield return null;
             }
         }
-        HuKing.instance.Log("SawRoom Loop stoped");
         yield return null;
     }
 

@@ -54,14 +54,12 @@ internal partial class HuStateMachine : EntityStateMachine
     private IEnumerator<Transition> Appear_SawNailRoom()
     {
         SetPlatFrameToHeroCenter();
-        HuKing.instance.Log($"appearing SawNailRoom level {level}");
         platFrame[level - 1].SetActive(true);
         yield return null;
     }
     [State]
     private IEnumerator<Transition> Disappear_SawNailRoom()
     {
-        // 1. 停止所有追踪的协程
         if (activeNailRoutines != null)
         {
             foreach (var routine in activeNailRoutines)
@@ -71,7 +69,6 @@ internal partial class HuStateMachine : EntityStateMachine
             activeNailRoutines.Clear();
         }
 
-        // 2. 停止并还原小骑士音效 (使用 instance)
         var hc = HeroController.instance;
         if (hc != null)
         {
@@ -91,8 +88,6 @@ internal partial class HuStateMachine : EntityStateMachine
                 }
             }
         }
-
-        // 3. 隐藏飞刺并清理残留红线
         if (nailPool != null)
         {
             foreach (var nail in nailPool)
@@ -106,7 +101,6 @@ internal partial class HuStateMachine : EntityStateMachine
             }
         }
 
-        // 4. 隐藏平台
         if (platFrame != null)
         {
             foreach (var plat in platFrame)
@@ -119,6 +113,7 @@ internal partial class HuStateMachine : EntityStateMachine
     }
     private IEnumerator Loop_SawNailRoom()
     {
+        yield return new WaitForSeconds(1.0f);
         while (true)
         {
             // 每次启动发射协程时，都将其句柄加入列表
@@ -196,14 +191,12 @@ internal partial class HuStateMachine : EntityStateMachine
         nail.SetActive(false);
 
         var rb = nail.GetComponent<Rigidbody2D>();
-        // 直接获取 HeroAudioController
         var ha = (HeroController.instance != null) ? HeroController.instance.GetComponent<HeroAudioController>() : null;
 
         nail.transform.position = spawnPos;
         float lookAngle = Mathf.Atan2(moveDirection.y, moveDirection.x) * Mathf.Rad2Deg;
         nail.transform.eulerAngles = new Vector3(0, 0, lookAngle + lookAngleOffset);
 
-        // --- 视觉预警 (无声音) ---
         GameObject line = new GameObject("AimLine");
         line.transform.SetParent(nail.transform);
         line.transform.localPosition = Vector3.zero;
@@ -262,11 +255,9 @@ internal partial class HuStateMachine : EntityStateMachine
         CreatePlatSquare(8f, platFrame[0]);
         CreatePlatSquare(6f, platFrame[1]);
         CreatePlatSquare(4f, platFrame[2]);
-        HuKing.instance.Log("PlatFrame_Container created");
     }
     private void CreatePlatSquare(float size, GameObject parent)
     {
-        // 添加数据组件并记录尺寸
         var data = parent.GetOrAddComponent<PlatFrameData>();
         data.Size = size;
 
@@ -315,8 +306,7 @@ internal partial class HuStateMachine : EntityStateMachine
         if (isMoving || targetFrame == null) yield break;
         isMoving = true;
 
-        // 1. 从对象本身获取尺寸，而非依赖外部的 level 变量
-        float currentSize = 8f; // 默认值
+        float currentSize = 8f;
         var data = targetFrame.GetComponent<PlatFrameData>();
         if (data != null)
         {
@@ -327,10 +317,8 @@ internal partial class HuStateMachine : EntityStateMachine
         Vector3 startPos = targetFrame.transform.position;
 
         float maxMoveDist = 2f;
-        // 使用动态获取的尺寸来计算 BoxCast 大小
         Vector2 boxSize = new Vector2(currentSize * 0.9f, currentSize * 0.9f);
 
-        // 2. 物理探测
         RaycastHit2D hit = Physics2D.BoxCast(startPos, boxSize, 0f, direction, maxMoveDist, 1 << 8);
 
         float finalMoveDist = maxMoveDist;
@@ -339,7 +327,6 @@ internal partial class HuStateMachine : EntityStateMachine
             finalMoveDist = Mathf.Max(0, hit.distance - 0.05f);
         }
 
-        // 3. 边界约束（可选：如果 UpWall 等是全局的话）
         if (direction.y > 0.1f)
         {
             float remainingDist = upWall - startPos.y;
@@ -348,7 +335,6 @@ internal partial class HuStateMachine : EntityStateMachine
 
         Vector3 targetPos = startPos + (Vector3)direction * finalMoveDist;
 
-        // 4. 平滑移动
         float elapsed = 0f;
         float duration = 0.1f;
         while (elapsed < duration)
@@ -373,7 +359,6 @@ internal partial class HuStateMachine : EntityStateMachine
     }
     private bool IsSawNailSkillActive()
     {
-        // 遍历所有平台，只要有一个在场，就说明技能正在进行
         if (platFrame == null) return false;
         for (int i = 0; i < platFrame.Length; i++)
         {
