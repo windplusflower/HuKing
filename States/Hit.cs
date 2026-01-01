@@ -13,7 +13,6 @@ internal partial class HuStateMachine : EntityStateMachine
     [State]
     private IEnumerator<Transition> Hit()
     {
-        //HuKing.instance.Log("Hit state entered");
         yield return new CoroutineTransition { Routine = skillLoop() };
         yield return new CoroutineTransition { Routine = WaitForHit() };
         yield return new ToState { State = nameof(DisAppear) };
@@ -51,7 +50,6 @@ internal partial class HuStateMachine : EntityStateMachine
         }
         else
         {
-            HuKing.instance.Log($"{SkillChoosen} skill not found");
             yield return new NoTransition();
         }
     }

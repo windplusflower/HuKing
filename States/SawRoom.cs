@@ -14,7 +14,6 @@ internal partial class HuStateMachine : EntityStateMachine
     [State]
     private IEnumerator<Transition> SawRoom()
     {
-        //HuKing.instance.Log("Entering SawRoom state");
         generateSaw();
         yield return new ToState { State = nameof(Appear) };
     }
@@ -25,11 +24,12 @@ internal partial class HuStateMachine : EntityStateMachine
             () => Loop_SawRoom(),
             () => Disappear_SawRoom()
         ));
+        registerSkill(nameof(SawRoom));
     }
     private (float, float, float, float) getLen()
     {
         int num1 = 3;
-        if (HPManager.hp <= originalHp * 2 / 3) num1 = 4;
+        if (level > 1) num1 = 4;
         float height = (upWall - downWall) / num1;
         int num2 = (int)((rightWall - leftWall) / (height * 1.2f));
         float width = (rightWall - leftWall) / num2;
@@ -124,10 +124,10 @@ internal partial class HuStateMachine : EntityStateMachine
     }
     private IEnumerator Loop_SawRoom()
     {
-        if (HPManager.hp <= originalHp / 3)
+        if (level > 2)
         {
             movingSaws = new Queue<GameObject>();
-            Queue<bool> sawDirections = new Queue<bool>(); // true表示上下运动，false表示左右运动
+            Queue<bool> sawDirections = new Queue<bool>();
 
             List<GameObject> eligibleSaws = new List<GameObject>();
             List<GameObject> allSaws = new List<GameObject>();
@@ -195,7 +195,6 @@ internal partial class HuStateMachine : EntityStateMachine
                 yield return null;
             }
         }
-        HuKing.instance.Log("SawRoom Loop stoped");
         yield return null;
     }
 
