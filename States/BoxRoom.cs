@@ -33,6 +33,17 @@ internal partial class HuStateMachine : EntityStateMachine
     {
         while (true)
         {
+            var damageHero = beam.GetComponent<DamageHero>();
+            if (damageHero == null)
+            {
+                // 有些激光 Prefab 伤害组件在子物体上
+                damageHero = beam.GetComponentInChildren<DamageHero>();
+            }
+
+            if (damageHero != null)
+            {
+                damageHero.damageDealt = 1;
+            }
             beam.transform.position = transform.position;
             var dir = (Target().transform.position - transform.position).normalized;
             var degree = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
@@ -42,9 +53,9 @@ internal partial class HuStateMachine : EntityStateMachine
             fsm.SendEvent("ANTIC");
             yield return new WaitForSeconds(0.65f);
             fsm.SendEvent("FIRE");
-            yield return new WaitForSeconds(0.16f);
+            yield return new WaitForSeconds(0.1f);
             fsm.SendEvent("END");
-            yield return new WaitForSeconds(0.6f);
+            yield return new WaitForSeconds(1f);
             beam.SetActive(false);
             yield return null;
         }

@@ -17,7 +17,7 @@ internal partial class HuStateMachine : EntityStateMachine
     private GameObject warpIn, warpOut, flash;
     private bool enableShining = true;
 
-    static public float leftWall = 32f, rightWall = 66f, downWall = 2.5f, upWall = 17f;
+    static public float leftWall = 32f, rightWall = 66f, downWall = 2f, upWall = 17f;
     private float fixedCameraX => (leftWall + rightWall) / 2f;
     // 修正了 Y 轴偏移，+5f 通常更适合 0.82 的缩放
     private float fixedCameraY => (downWall + upWall) / 2f;
@@ -43,6 +43,7 @@ internal partial class HuStateMachine : EntityStateMachine
 
     private static readonly FieldInfo xLockField = typeof(CameraController).GetField("xLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
     private static readonly FieldInfo yLockField = typeof(CameraController).GetField("yLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
+    private GameObject arenaRoof;
 
     public HuStateMachine() : base(
         startState: nameof(Idle),
@@ -78,6 +79,7 @@ internal partial class HuStateMachine : EntityStateMachine
         warpIn = gameObject.FindGameObjectInChildren("Warp");
         warpOut = gameObject.FindGameObjectInChildren("Warp Out");
         flash = gameObject.FindGameObjectInChildren("White Flash");
+        DisableArenaRoof();
 
         for (int i = 0; i < 150; i++)
         {
@@ -108,7 +110,25 @@ internal partial class HuStateMachine : EntityStateMachine
         StartCoroutine(PermanentCameraLock());
         UnityEngine.SceneManagement.SceneManager.activeSceneChanged += OnSceneChanged;
     }
+    private void DisableArenaRoof()
+    {
+        // 只负责寻找对象并保存引用，不在这里做大幅度位移
+        arenaRoof = GameObject.Find("GG_Arena_Prefab/Roof");
 
+        // 如果找不到，尝试深度搜索（保持你原有的逻辑）
+        if (arenaRoof == null)
+        {
+            var allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
+            foreach (var obj in allObjects)
+            {
+                if (obj.name == "Roof" && obj.transform.parent != null && obj.transform.parent.name == "GG_Arena_Prefab")
+                {
+                    arenaRoof = obj;
+                    break;
+                }
+            }
+        }
+    }
     private void OnSceneChanged(UnityEngine.SceneManagement.Scene from, UnityEngine.SceneManagement.Scene to)
     {
         On.CameraController.LateUpdate -= CameraLateUpdateHook;
@@ -190,9 +210,17 @@ internal partial class HuStateMachine : EntityStateMachine
         var tkCam = GameCameras.instance.tk2dCam;
 
         float elapsed = 0f;
-        float duration = 2.0f;
+        float duration = 2.0f; // 2秒的同步时间
         float startZoom = tkCam.ZoomFactor;
         Vector3 startPos = camCtrl.transform.position;
+
+        // 记录天花板的初始状态
+        Vector3 roofStartPos = arenaRoof != null ? arenaRoof.transform.position : Vector3.zero;
+        Vector3 roofStartScale = arenaRoof != null ? arenaRoof.transform.localScale : Vector3.one;
+
+        // 设置天花板的目标值
+        float roofTargetY = 7f;
+        Vector3 roofTargetScale = new Vector3(1f, 0.4f, 1f);
 
         camCtrl.mode = CameraController.CameraMode.FROZEN;
 
@@ -201,23 +229,32 @@ internal partial class HuStateMachine : EntityStateMachine
             elapsed += Time.unscaledDeltaTime;
             float t = Mathf.SmoothStep(0, 1, elapsed / duration);
 
+            // 1. 镜头原有的逻辑
             float curZoom = Mathf.Lerp(startZoom, globalZoom, t);
             float curX = Mathf.Lerp(startPos.x, fixedCameraX, t);
             float curY = Mathf.Lerp(startPos.y, fixedCameraY, t);
 
             tkCam.ZoomFactor = curZoom;
-            Vector3 pos = new Vector3(curX, curY, startPos.z);
-            camCtrl.transform.position = pos;
-
+            camCtrl.transform.position = new Vector3(curX, curY, startPos.z);
             xLockField?.SetValue(camCtrl, curX);
             yLockField?.SetValue(camCtrl, curY);
+
+            // 2. 新增：天花板同步平移和缩放
+            if (arenaRoof != null)
+            {
+                // Y 轴平移
+                float newRoofY = Mathf.Lerp(roofStartPos.y, roofTargetY, t);
+                arenaRoof.transform.position = new Vector3(roofStartPos.x, newRoofY, roofStartPos.z);
+
+                // 缩放渐变
+                arenaRoof.transform.localScale = Vector3.Lerp(roofStartScale, roofTargetScale, t);
+            }
 
             yield return null;
         }
 
         isCameraLocked = true;
     }
-
     private void SetupStompers()
     {
         for (int i = 0; i < 20; i++)
