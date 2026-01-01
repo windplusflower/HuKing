@@ -1,7 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using GlobalEnums;
+using Modding;
 using RingLib.StateMachine;
 using Satchel;
 using UnityEngine;
@@ -15,9 +17,10 @@ internal partial class HuStateMachine : EntityStateMachine
     private GameObject warpIn, warpOut, flash;
     private bool enableShining = true;
 
-    static private float leftWall = 32f, rightWall = 66f, downWall = 2.5f, upWall = 17f;
+    static public float leftWall = 32f, rightWall = 66f, downWall = 2.5f, upWall = 17f;
     private float fixedCameraX => (leftWall + rightWall) / 2f;
-    private float fixedCameraY => (downWall + upWall) / 2f + 2f;
+    // 修正了 Y 轴偏移，+5f 通常更适合 0.82 的缩放
+    private float fixedCameraY => (downWall + upWall) / 2f;
 
     private Queue<GameObject> saws = new();
     private Queue<GameObject> blankSaws = new();
@@ -29,12 +32,17 @@ internal partial class HuStateMachine : EntityStateMachine
     private Vector3 targetHuPosition;
 
     private float globalZoom = 0.82f;
+    private bool isCameraLocked = false; // 全局相机锁定开关
 
     private int hitCount = 0;
     private float sawSize = 0.3f;
     private string SkillChoosen = "None";
     private int level = 1;
     private Dictionary<string, SkillPhases> skillTable = new Dictionary<string, SkillPhases>();
+
+    // 缓存反射字段以提高性能
+    private static readonly FieldInfo xLockField = typeof(CameraController).GetField("xLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
+    private static readonly FieldInfo yLockField = typeof(CameraController).GetField("yLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
 
     public HuStateMachine() : base(
         startState: nameof(Idle),
@@ -61,6 +69,7 @@ internal partial class HuStateMachine : EntityStateMachine
 
     protected override void EntityStateMachineFixedUpdate()
     {
+        // 禁用蓄力
         Modding.ReflectionHelper.SetField(HeroController.instance, "nailChargeTimer", 0f);
     }
 
@@ -79,7 +88,7 @@ internal partial class HuStateMachine : EntityStateMachine
         SetupStompers();
 
         HPManager = gameObject.GetComponent<HealthManager>();
-        HPManager.hp = 601;
+        HPManager.hp = 1001;
         if (BossSceneController.Instance.BossLevel > 0)
         {
             HPManager.hp = 1501;
@@ -91,70 +100,70 @@ internal partial class HuStateMachine : EntityStateMachine
         var rb = GetComponent<Rigidbody2D>();
         rb.bodyType = RigidbodyType2D.Kinematic;
 
+        // 注册核心相机钩子
+        On.CameraController.LateUpdate += CameraLateUpdateHook;
+
+        // 开始渐变锁定
         StartCoroutine(PermanentCameraLock());
         UnityEngine.SceneManagement.SceneManager.activeSceneChanged += OnSceneChanged;
     }
+
     private void OnSceneChanged(UnityEngine.SceneManagement.Scene from, UnityEngine.SceneManagement.Scene to)
     {
+        // 卸载钩子，防止影响其他场景
+        On.CameraController.LateUpdate -= CameraLateUpdateHook;
+
         if (from.name == "GG_Ghost_Hu")
         {
             if (GameCameras.instance != null)
             {
                 var camCtrl = GameCameras.instance.cameraController;
                 var tkCam = GameCameras.instance.tk2dCam;
-
-                if (camCtrl != null)
-                {
-                    camCtrl.mode = CameraController.CameraMode.LOCKED;
-                }
-
-                if (tkCam != null)
-                {
-                    // 场景转换时直接重置为 1.0f 最为稳妥
-                    tkCam.ZoomFactor = 1.0f;
-                }
+                if (camCtrl != null) camCtrl.mode = CameraController.CameraMode.LOCKED;
+                if (tkCam != null) tkCam.ZoomFactor = 1.0f;
             }
         }
     }
-    private IEnumerator PermanentCameraLock()
+
+    // 核心：彻底解决抖动和 Y 轴漂移的钩子
+    private void CameraLateUpdateHook(On.CameraController.orig_LateUpdate orig, CameraController self)
     {
-        var camCtrl = GameCameras.instance.cameraController;
-        var tkCam = GameCameras.instance.tk2dCam;
-        var type = typeof(CameraController);
-        var fieldX = type.GetField("xLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
-        var fieldY = type.GetField("yLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
+        orig(self); // 先让原逻辑跑完（包括起跳、复活等计算）
 
-        float elapsed = 0f;
-        float duration = 2.0f;
-        float startZoom = tkCam.ZoomFactor;
-        Vector3 startPos = camCtrl.transform.position;
-        Vector3 finalTargetPos = new Vector3(fixedCameraX, fixedCameraY, startPos.z);
-
-        camCtrl.mode = CameraController.CameraMode.FROZEN;
-        while (elapsed < duration)
+        if (isCameraLocked)
         {
-            elapsed += Time.unscaledDeltaTime;
-            float t = Mathf.SmoothStep(0, 1, elapsed / duration);
-            float curZoom = Mathf.Lerp(startZoom, globalZoom, t);
-            float curX = Mathf.Lerp(startPos.x, finalTargetPos.x, t);
-            float curY = Mathf.Lerp(startPos.y, finalTargetPos.y, t);
+            // 在原逻辑运行后的同一帧，强制覆盖所有结果
+            self.mode = CameraController.CameraMode.FROZEN;
 
-            tkCam.ZoomFactor = curZoom;
-            camCtrl.transform.position = new Vector3(curX, curY, startPos.z);
-            fieldX?.SetValue(camCtrl, curX);
-            fieldY?.SetValue(camCtrl, curY);
-            yield return null;
+            // 锁定位置
+            Vector3 targetPos = new Vector3(fixedCameraX, fixedCameraY, self.transform.position.z);
+            self.transform.position = targetPos;
+
+            // 锁定私有坐标字段，确保相机内部状态同步
+            xLockField?.SetValue(self, fixedCameraX);
+            yLockField?.SetValue(self, fixedCameraY);
+
+            // 锁定缩放
+            if (GameCameras.instance.tk2dCam != null)
+            {
+                GameCameras.instance.tk2dCam.ZoomFactor = globalZoom;
+            }
         }
     }
+    // 将此方法放回 HuStateMachine 类中以修复编译错误
     private IEnumerator RestoreCameraZoomGlobal()
     {
         var tkCam = GameCameras.instance?.tk2dCam;
         if (tkCam == null) yield break;
 
+        // 关键：开始恢复缩放前，必须关闭强行锁定开关
+        isCameraLocked = false;
+
         float restoreElapsed = 0f;
         float restoreDuration = 1.2f;
         float zoomAtDeath = tkCam.ZoomFactor;
 
+        // 如果缩放已经很接近 1.0，直接重置
         if (Mathf.Abs(zoomAtDeath - 1.0f) < 0.01f)
         {
             tkCam.ZoomFactor = 1.0f;
@@ -177,8 +186,51 @@ internal partial class HuStateMachine : EntityStateMachine
         {
             tkCam.ZoomFactor = 1.0f;
         }
-        GameCameras.instance.cameraController.mode = CameraController.CameraMode.LOCKED;
+
+        // 恢复完成后将模式设回 LOCKED 或 FOLLOWING
+        if (GameCameras.instance != null && GameCameras.instance.cameraController != null)
+        {
+            GameCameras.instance.cameraController.mode = CameraController.CameraMode.LOCKED;
+        }
     }
+    private IEnumerator PermanentCameraLock()
+    {
+        isCameraLocked = false; // 过渡期间先由协程控制
+        var camCtrl = GameCameras.instance.cameraController;
+        var tkCam = GameCameras.instance.tk2dCam;
+
+        float elapsed = 0f;
+        float duration = 2.0f;
+        float startZoom = tkCam.ZoomFactor;
+        Vector3 startPos = camCtrl.transform.position;
+
+        camCtrl.mode = CameraController.CameraMode.FROZEN;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.SmoothStep(0, 1, elapsed / duration);
+
+            float curZoom = Mathf.Lerp(startZoom, globalZoom, t);
+            float curX = Mathf.Lerp(startPos.x, fixedCameraX, t);
+            float curY = Mathf.Lerp(startPos.y, fixedCameraY, t);
+
+            tkCam.ZoomFactor = curZoom;
+            Vector3 pos = new Vector3(curX, curY, startPos.z);
+            camCtrl.transform.position = pos;
+
+            xLockField?.SetValue(camCtrl, curX);
+            yLockField?.SetValue(camCtrl, curY);
+
+            yield return null;
+        }
+
+        // 过渡完成，开启 LateUpdate 的强行锁定开关
+        isCameraLocked = true;
+    }
+
+    // 原有的逻辑已失效，现在由 Hook 托管，将其清空或移除
+    private void ForceCameraToFixedState() { }
 
     private void SetupStompers()
     {
@@ -204,8 +256,8 @@ internal partial class HuStateMachine : EntityStateMachine
         registerBoxRoom();
         registerSawNailRoom();
         registerSawShotRoom();
+        registerMatchThreeRoom();
     }
 
     private GameObject Target() => HeroController.instance.gameObject;
-
 }

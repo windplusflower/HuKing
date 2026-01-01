@@ -29,6 +29,7 @@ internal partial class HuStateMachine : EntityStateMachine
             () => Loop_SawShotRoom(),
             () => Disappear_SawShotRoom()
         ));
+        registerSkill(nameof(SawShotRoom));
 
         for (int i = 0; i < 3; i++)
         {

@@ -21,6 +21,7 @@ internal partial class HuStateMachine : EntityStateMachine
             () => Loop_BoxRoom(),
             () => Disappear_BoxRoom()
         ));
+        registerSkill(nameof(BoxRoom));
     }
     private IEnumerator Loop_BoxRoom()
     {

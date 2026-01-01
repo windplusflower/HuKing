@@ -29,6 +29,7 @@ internal partial class HuStateMachine : EntityStateMachine
             () => Loop_SawNailRoom(),
             () => Disappear_SawNailRoom()
         ));
+        registerSkill(nameof(SawNailRoom));
         InitializePlatFrame();
         if (nailPool.Count > 0) return;
 

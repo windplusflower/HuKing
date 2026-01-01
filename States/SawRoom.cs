@@ -25,6 +25,7 @@ internal partial class HuStateMachine : EntityStateMachine
             () => Loop_SawRoom(),
             () => Disappear_SawRoom()
         ));
+        registerSkill(nameof(SawRoom));
     }
     private (float, float, float, float) getLen()
     {
