@@ -44,6 +44,7 @@ internal partial class HuStateMachine : EntityStateMachine
     private static readonly FieldInfo xLockField = typeof(CameraController).GetField("xLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
     private static readonly FieldInfo yLockField = typeof(CameraController).GetField("yLockPos", BindingFlags.Instance | BindingFlags.NonPublic);
     private GameObject arenaRoof;
+    private GameObject skillRing;
 
     public HuStateMachine() : base(
         startState: nameof(Idle),
@@ -66,6 +67,15 @@ internal partial class HuStateMachine : EntityStateMachine
         this.nailPrefab = nailPrefab;
         this.sawSize = sawsize;
         this.enableShining = enableShining;
+        if (skillRing == null)
+        {
+            skillRing = Instantiate(ringPrefab);
+            skillRing.transform.parent = Target().transform;
+            skillRing.transform.localPosition = new Vector3(0, 3.5f, 0);
+            var fsm = skillRing.LocateMyFSM("Control");
+            fsm.enabled = false;
+        }
+        skillRing.SetActive(false);
     }
 
     protected override void EntityStateMachineFixedUpdate()
@@ -141,6 +151,10 @@ internal partial class HuStateMachine : EntityStateMachine
                 var tkCam = GameCameras.instance.tk2dCam;
                 if (camCtrl != null) camCtrl.mode = CameraController.CameraMode.LOCKED;
                 if (tkCam != null) tkCam.ZoomFactor = 1.0f;
+            }
+            if (skillRing != null)
+            {
+                skillRing.SetActive(false);
             }
         }
     }

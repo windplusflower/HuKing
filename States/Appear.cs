@@ -30,15 +30,10 @@ internal partial class HuStateMachine : EntityStateMachine
         rb.velocity = Vector2.zero;
         rb.gravityScale = 0;
 
-        var ring = Instantiate(ringPrefab);
+        var ring = skillRing;
         try
         {
-            ring.transform.parent = Target().transform;
-            ring.transform.localPosition = new Vector3(0, 3.5f, 0);
-
             var player = ring.GetComponent<tk2dSpriteAnimator>();
-            var fsm = ring.LocateMyFSM("Control");
-            fsm.enabled = false;
 
             ring.SetActive(true);
             player.Play("Ring Antic 1");
@@ -70,7 +65,7 @@ internal partial class HuStateMachine : EntityStateMachine
         }
         finally
         {
-            if (ring != null) Destroy(ring);
+            if (ring != null) ring.SetActive(false);
             rb.gravityScale = 1;
             HeroController.instance.RegainControl();
             PlayerData.instance.SetHazardRespawn(targetKnightPosition, true);
