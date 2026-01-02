@@ -89,6 +89,30 @@ internal partial class HuStateMachine : EntityStateMachine
         saw.transform.localScale = Vector3.one * 0.22f;
         saw.SetActive(true);
 
+        // --- 增强鲜艳度和视觉反馈 (直接修改 saw 属性) ---
+        var sr = saw.GetComponent<SpriteRenderer>();
+        if (sr != null)
+        {
+            // 1. 让颜色更亮，使用明亮的青色或亮黄色
+            sr.color = new Color(0.5f, 1f, 1f, 1f);
+            // 2. 尝试使用游戏内置的发光材质 (如果不存在则保持默认)
+            sr.material = new Material(Shader.Find("Sprites/Default"));
+        }
+
+        // 3. 添加简单的拖尾效果 (Trail)，让运动轨迹清晰可见
+        var trail = saw.AddComponent<TrailRenderer>();
+        trail.time = 0.2f;           // 拖尾残留时间
+        trail.startWidth = 0.4f;     // 起始宽度
+        trail.endWidth = 0f;         // 末端逐渐变细
+        trail.material = new Material(Shader.Find("Sprites/Default"));
+        // 设置拖尾颜色（青色渐变到透明）
+        Gradient gradient = new Gradient();
+        gradient.SetKeys(
+            new GradientColorKey[] { new GradientColorKey(Color.cyan, 0.0f), new GradientColorKey(Color.white, 1.0f) },
+            new GradientAlphaKey[] { new GradientAlphaKey(0.6f, 0.0f), new GradientAlphaKey(0.0f, 1.0f) }
+        );
+        trail.colorGradient = gradient;
+
         var hazard = saw.GetComponent<DamageHero>();
         if (hazard != null) Destroy(hazard);
         var col = saw.GetComponent<Collider2D>();
