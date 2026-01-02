@@ -88,6 +88,23 @@ internal partial class HuStateMachine : EntityStateMachine
         activeSaws.Add(saw);
         saw.transform.localScale = Vector3.one * 0.22f;
         saw.SetActive(true);
+        var sr = saw.GetComponent<SpriteRenderer>();
+        if (sr != null)
+        {
+            sr.color = new Color(0.5f, 1f, 1f, 1f);
+            sr.material = new Material(Shader.Find("Sprites/Default"));
+        }
+        var trail = saw.AddComponent<TrailRenderer>();
+        trail.time = 0.2f;
+        trail.startWidth = 0.4f;
+        trail.endWidth = 0f;
+        trail.material = new Material(Shader.Find("Sprites/Default"));
+        Gradient gradient = new Gradient();
+        gradient.SetKeys(
+            new GradientColorKey[] { new GradientColorKey(Color.cyan, 0.0f), new GradientColorKey(Color.white, 1.0f) },
+            new GradientAlphaKey[] { new GradientAlphaKey(0.6f, 0.0f), new GradientAlphaKey(0.0f, 1.0f) }
+        );
+        trail.colorGradient = gradient;
 
         var hazard = saw.GetComponent<DamageHero>();
         if (hazard != null) Destroy(hazard);
